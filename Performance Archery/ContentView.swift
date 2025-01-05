@@ -10,24 +10,29 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
-    @State var count: Int = 0
+    @Query private var trainingSessions: [Item]
 
     var body: some View {
         Text("Training Log")
         NavigationSplitView {
             List {
-                ForEach(items) { item in
+                ForEach(trainingSessions) { session in
                     NavigationLink {
-                        Text("Training session on \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                        Text("Arrows shot: \(count)")
+                        Text("Training session on \(session.timestamp, format: Date.FormatStyle(date: .numeric, time: .shortened))")
+                        Text("Arrows shot: \(session.arrowCount)")
                         Button(action: {
-                            self.count += 1
+                            session.arrowCount += 1
                         }) {
-                            Text("Increment")
+                            Label("Increment", systemImage: "plus")
+                        }
+                        Button(action: {
+                            session.arrowCount -= 1
+                        }) {
+                            Label("Decrement", systemImage: "minus")
                         }
                     } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .long, time: .shortened))
+                        Text(session.timestamp, format: Date.FormatStyle(date: .long, time: .shortened))
+                        Text("Arrows: " + String(session.arrowCount))
                     }
                 }
                 .onDelete(perform: deleteItems)
@@ -57,7 +62,7 @@ struct ContentView: View {
     private func deleteItems(offsets: IndexSet) {
         withAnimation {
             for index in offsets {
-                modelContext.delete(items[index])
+                modelContext.delete(trainingSessions[index])
             }
         }
     }

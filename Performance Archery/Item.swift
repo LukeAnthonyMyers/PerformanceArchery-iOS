@@ -11,8 +11,10 @@ import SwiftData
 @Model
 final class Item {
     var timestamp: Date
+    var arrowCount: Int
     
     init(timestamp: Date) {
         self.timestamp = timestamp
+        self.arrowCount = 0
     }
 }
