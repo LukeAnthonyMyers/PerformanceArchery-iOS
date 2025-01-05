@@ -9,66 +9,22 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var trainingSessions: [Item]
-
     var body: some View {
-        Text("Training Log")
-        NavigationSplitView {
-            List {
-                ForEach(trainingSessions) { session in
-                    NavigationLink {
-                        Text("Training session on \(session.timestamp, format: Date.FormatStyle(date: .numeric, time: .shortened))")
-                        Text("Arrows shot: \(session.arrowCount)")
-                        Button(action: {
-                            session.arrowCount += 1
-                        }) {
-                            Label("Increment", systemImage: "plus")
-                        }
-                        Button(action: {
-                            session.arrowCount -= 1
-                        }) {
-                            Label("Decrement", systemImage: "minus")
-                        }
-                    } label: {
-                        Text(session.timestamp, format: Date.FormatStyle(date: .long, time: .shortened))
-                        Text("Arrows: " + String(session.arrowCount))
-                    }
+        TabView {
+            EventCalendarView()
+                .tabItem() {
+                    Image(systemName: "calendar")
+                    Text("Event Calendar")
                 }
-                .onDelete(perform: deleteItems)
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
+            TrainingLogView()
+                .tabItem() {
+                    Image(systemName: "list.bullet")
+                    Text("Training Log")
                 }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
-        }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(trainingSessions[index])
-            }
         }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }
