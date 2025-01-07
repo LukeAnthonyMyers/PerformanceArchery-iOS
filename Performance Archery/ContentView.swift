@@ -13,13 +13,15 @@ struct ContentView: View {
         TabView {
             EventCalendarView()
                 .tabItem() {
-                    Image(systemName: "calendar")
-                    Text("Event Calendar")
+                    Label("Event Calendar", systemImage: "calendar")
+                }
+            ActivitiesView()
+                .tabItem() {
+                    Label("Activities", systemImage: "figure.archery")
                 }
             TrainingLogView()
                 .tabItem() {
-                    Image(systemName: "list.bullet")
-                    Text("Training Log")
+                    Label("Training Log", systemImage: "list.bullet")
                 }
         }
     }
