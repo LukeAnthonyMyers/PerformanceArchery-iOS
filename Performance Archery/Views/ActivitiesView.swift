@@ -14,9 +14,13 @@ struct ActivitiesView: View {
                          Game(id: "Swedish Dot", description: "Closest to centre", logo: "smallcircle.circle")]
     
     var body: some View {
-        List(games) { game in
-            HStack{
-                Label(game.id, systemImage: game.logo)
+        NavigationView{
+            List(games) { game in
+                NavigationLink {
+                    GoldGameView()
+                } label: {
+                    Label(game.id, systemImage: game.logo)
+                }
             }
         }
     }

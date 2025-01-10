@@ -12,13 +12,9 @@ struct EventCalendarView: View {
         ZStack {
             Color.blue
             
-            Button(action: {
-                
-            }) {
-                Image(systemName: "calendar.badge.plus")
+            Label("Work in progress", systemImage: "calendar")
                     .foregroundColor(Color.white)
-                    .font(.system(size: 100))
-            }
+                    .font(.system(size: 20))
         }
     }
 }

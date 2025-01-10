@@ -14,7 +14,6 @@ struct TrainingLogView: View {
     
     var body: some View {
         NavigationSplitView {
-            Text("Training Log")
             List {
                 ForEach(trainingSessions) { session in
                     NavigationLink {
@@ -26,7 +25,7 @@ struct TrainingLogView: View {
                             Label("Increment", systemImage: "plus")
                         }
                         Button(action: {
-                            if session.arrowCount != 0 {
+                            if session.arrowCount > 0 {
                                 session.arrowCount -= 1
                             }
                         }) {
@@ -49,6 +48,7 @@ struct TrainingLogView: View {
                     }
                 }
             }
+            .navigationTitle("Training Log")
         } detail: {
             Text("Select an item")
         }
