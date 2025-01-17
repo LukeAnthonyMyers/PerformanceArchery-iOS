@@ -8,28 +8,38 @@
 import SwiftUI
 
 struct ActivitiesView: View {
-    @State private var arrowValue = "0"
-    private var games = [Game(id: "Original Gold Game", description: "7- = -1, 8 = 0, 9+ =1)", logo: "target"),
-                         Game(id: "9.5 Gold Game", description: "(8- = -1, 9+ = 1)", logo: "target"),
-                         Game(id: "Swedish Dot", description: "Closest to centre", logo: "smallcircle.circle")]
+    @State private var originals: Bool = false
+    
+    let allActivities = [Activities(type: "Single Player", activities: [
+                                Activity(name: "Original Gold Game", explanation: "7- = -1, 8 = 0, 9+ =1)", logo: "smallcircle.circle", multiplayer: false, view: GoldGameView(original: true)),
+                                Activity(name: "9.5 Gold Game", explanation: "(8- = -1, 9+ = 1)", logo: "smallcircle.circle", multiplayer: false, view: GoldGameView(original: false))]),
+                         Activities(type: "Multiplayer", activities: [
+                                Activity(name: "Swedish Dot", explanation: "Closest to centre", logo: "target", multiplayer: true, view: GoldGameView(original: true))])]
     
     var body: some View {
-        NavigationView{
-            List(games) { game in
-                NavigationLink {
-                    GoldGameView()
-                } label: {
-                    Label(game.id, systemImage: game.logo)
+        NavigationView {
+            List(allActivities) { activityCategory in
+                Section(header: Text(activityCategory.type)) {
+                    ForEach(activityCategory.activities) { activity in
+                        NavigationLink {
+                            AnyView(activity.view)
+                        } label: {
+                            HStack {
+                                Label(activity.name, systemImage: activity.logo)
+                            }
+                        }
+                    }
                 }
             }
+            .navigationTitle("Activities")
         }
     }
 }
 
-struct Game: Identifiable {
-    var id: String
-    var description: String
-    var logo: String
+struct Activities: Identifiable {
+    var id = UUID()
+    var type: String
+    var activities: [Activity] = []
 }
 
 #Preview {
