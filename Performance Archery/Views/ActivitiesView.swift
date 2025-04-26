@@ -14,7 +14,7 @@ struct ActivitiesView: View {
                                 Activity(name: "Original Gold Game", explanation: "7- = -1, 8 = 0, 9+ =1)", logo: "smallcircle.circle", multiplayer: false, view: GoldGameView(original: true)),
                                 Activity(name: "9.5 Gold Game", explanation: "(8- = -1, 9+ = 1)", logo: "smallcircle.circle", multiplayer: false, view: GoldGameView(original: false))]),
                          Activities(type: "Multiplayer", activities: [
-                                Activity(name: "Swedish Dot", explanation: "Closest to centre", logo: "target", multiplayer: true, view: GoldGameView(original: true))])]
+                            Activity(name: "Swedish Dot", explanation: "Closest to centre", logo: "target", multiplayer: true, view: SwedishDotView(spots: 3))])]
     
     var body: some View {
         NavigationView {

@@ -18,22 +18,49 @@ struct TrainingLogView: View {
                 ForEach(trainingSessions) { session in
                     NavigationLink {
                         Text("Training session on \(session.timestamp, format: Date.FormatStyle(date: .numeric, time: .shortened))")
-                        Text("Arrows shot: \(session.arrowCount)").font(.system(size: 50))
-                        Button(action: {
-                            session.arrowCount += 1
-                        }) {
-                            Label("Increment", systemImage: "plus")
-                        }
-                        Button(action: {
-                            if session.arrowCount > 0 {
-                                session.arrowCount -= 1
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 50) {
+                            VStack {
+                                Text("Shots\n\(session.arrowCount)").font(.system(size: 30))
+                                    .multilineTextAlignment(.center)
+                                Button(action: {
+                                    session.arrowCount += 1
+                                }) {
+                                    Label("Increment", systemImage: "plus")
+                                }
+                                Button(action: {
+                                    if session.arrowCount > 0 {
+                                        session.arrowCount -= 1
+                                    }
+                                }) {
+                                    Label("Decrement", systemImage: "minus")
+                                }
                             }
-                        }) {
-                            Label("Decrement", systemImage: "minus")
+                            
+                            VStack {
+                                Text("Come Downs\n\(session.comeDowns)").font(.system(size: 30))
+                                    .multilineTextAlignment(.center)
+                                Button(action: {
+                                    session.comeDowns += 1
+                                }) {
+                                    Label("Increment", systemImage: "plus")
+                                }
+                                Button(action: {
+                                    if session.comeDowns > 0 {
+                                        session.comeDowns -= 1
+                                    }
+                                }) {
+                                    Label("Decrement", systemImage: "minus")
+                                }
+                            }
                         }
+                        
+                        Spacer()
                     } label: {
                         Text(session.timestamp, format: Date.FormatStyle(date: .long, time: .shortened))
-                        Text("Arrows: " + String(session.arrowCount))
+                        Text("Shots: " + String(session.arrowCount))
                     }
                 }
                 .onDelete(perform: deleteItems)
