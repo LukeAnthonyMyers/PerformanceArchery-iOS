@@ -10,30 +10,57 @@ import SwiftData
 
 struct TrainingLogView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var trainingSessions: [Item]
+    @Query private var trainingSessions: [TrainingSession]
     
     var body: some View {
         NavigationSplitView {
             List {
                 ForEach(trainingSessions) { session in
                     NavigationLink {
-                        Text("Training session on \(session.timestamp, format: Date.FormatStyle(date: .numeric, time: .shortened))")
-                        Text("Arrows shot: \(session.arrowCount)").font(.system(size: 50))
-                        Button(action: {
-                            session.arrowCount += 1
-                        }) {
-                            Label("Increment", systemImage: "plus")
-                        }
-                        Button(action: {
-                            if session.arrowCount > 0 {
-                                session.arrowCount -= 1
+                        Text("Training session on \(session.dateTime, format: Date.FormatStyle(date: .numeric, time: .shortened))")
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 50) {
+                            VStack {
+                                Text("Shots\n\(session.arrowCount)").font(.system(size: 30))
+                                    .multilineTextAlignment(.center)
+                                Button(action: {
+                                    session.arrowCount += 1
+                                }) {
+                                    Label("Increment", systemImage: "plus")
+                                }
+                                Button(action: {
+                                    if session.arrowCount > 0 {
+                                        session.arrowCount -= 1
+                                    }
+                                }) {
+                                    Label("Decrement", systemImage: "minus")
+                                }
                             }
-                        }) {
-                            Label("Decrement", systemImage: "minus")
+                            
+                            VStack {
+                                Text("Come Downs\n\(session.comeDowns)").font(.system(size: 30))
+                                    .multilineTextAlignment(.center)
+                                Button(action: {
+                                    session.comeDowns += 1
+                                }) {
+                                    Label("Increment", systemImage: "plus")
+                                }
+                                Button(action: {
+                                    if session.comeDowns > 0 {
+                                        session.comeDowns -= 1
+                                    }
+                                }) {
+                                    Label("Decrement", systemImage: "minus")
+                                }
+                            }
                         }
+                        
+                        Spacer()
                     } label: {
-                        Text(session.timestamp, format: Date.FormatStyle(date: .long, time: .shortened))
-                        Text("Arrows: " + String(session.arrowCount))
+                        Text(session.dateTime, format: Date.FormatStyle(date: .long, time: .shortened))
+                        Text("Shots: " + String(session.arrowCount))
                     }
                 }
                 .onDelete(perform: deleteItems)
@@ -55,10 +82,10 @@ struct TrainingLogView: View {
     }
     
     private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
+//        withAnimation {
+//            let newItem = TrainingSession(dateTime: Date())
+//            modelContext.insert(newItem)
+//        }
     }
     
     private func deleteItems(offsets: IndexSet) {
@@ -72,5 +99,5 @@ struct TrainingLogView: View {
 
 #Preview {
     TrainingLogView()
-        .modelContainer(for: Item.self, inMemory: true)
+        .modelContainer(for: TrainingSession.self, inMemory: true)
 }

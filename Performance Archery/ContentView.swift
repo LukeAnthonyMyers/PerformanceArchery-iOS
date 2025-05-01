@@ -11,9 +11,9 @@ import SwiftData
 struct ContentView: View {
     var body: some View {
         TabView {
-            EventCalendarView()
+            CalendarView()
                 .tabItem() {
-                    Label("Event Calendar", systemImage: "calendar")
+                    Label("Calendar", systemImage: "calendar")
                 }
             ActivitiesView()
                 .tabItem() {
