@@ -15,11 +15,12 @@ protocol Event {
     var dateTime: Date { get set }
     var goals: String { get set }
     var reflection: String { get set }
+    var locationName: String { get set }
     var latitude: Double? { get set }
     var longitude: Double? { get set }
 }
 
-extension TrainingSession: Event {}
+extension ShootingSession: Event {}
 extension CoachingSession: Event {}
 extension Competition: Event {}
 
@@ -46,9 +47,12 @@ struct EventEditView: View {
     ))
     
     let sessionTypes = ["Training", "Coaching", "Competition"]
-    @State private var selectedSessionType = "Competition"
+    @State private var selectedSessionType = "Training"
     
-    let rounds = ["WA18", "WA720", "WA1440"]
+    let trainingTypes = ["Shooting", "SPT", "S&C"]
+    @State private var selectedTrainingType = "Shooting"
+    
+    let rounds = ["WA18", "WA25", "WA720", "WA900", "WA1440"]
     @State private var selectedRound = "WA720"
     
     init(event: (any Event & AnyObject)? = nil) {
@@ -56,6 +60,7 @@ struct EventEditView: View {
         
         if let event = event {
             _selectedDate = State(initialValue: event.dateTime)
+            _address = State(initialValue: event.locationName)
             
             if let latitude = event.latitude, let longitude = event.longitude {
                 _region = State(initialValue: MKCoordinateRegion(
@@ -82,13 +87,13 @@ struct EventEditView: View {
                 _coachName = State(initialValue: coachingSession.coachName)
                 _goals = State(initialValue: coachingSession.goals)
                 _reflection = State(initialValue: coachingSession.reflection)
-            } else if let trainingSession = event as? TrainingSession {
+            } else if let trainingSession = event as? ShootingSession {
                 _selectedSessionType = State(initialValue: "Training")
                 _goals = State(initialValue: trainingSession.goals)
                 _reflection = State(initialValue: trainingSession.reflection)
             }
         } else {
-            _selectedSessionType = State(initialValue: "Competition")
+            _selectedSessionType = State(initialValue: "Training")
         }
     }
 
@@ -109,7 +114,15 @@ struct EventEditView: View {
                 .pickerStyle(.segmented)
                 .disabled(event != nil)
                 
-                DatePicker("Select Date", selection: $selectedDate, displayedComponents: .date)
+                if selectedSessionType == "Training" {
+                    Picker("Select a training type", selection: $selectedTrainingType) {
+                        ForEach(trainingTypes, id: \.self) { trainingType in
+                            Text(trainingType)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(event != nil)
+                }
                 
                 if selectedSessionType == "Competition" {
                     TextField("Competition name", text: $competitionName)
@@ -138,6 +151,8 @@ struct EventEditView: View {
                         .textFieldStyle(.roundedBorder)
                 }
                 
+                DatePicker("Select Date", selection: $selectedDate, displayedComponents: .date)
+                
                 VStack {
                     HStack {
                         TextField("Location", text: $address, onCommit: {
@@ -147,11 +162,6 @@ struct EventEditView: View {
                         
                         LocationButton(.currentLocation) {
                             requestCurrentLocation()
-                            if let coord = selectedCoordinate {
-                                reverseGeocode(coordinate: coord) { addressString in
-                                    address = addressString ?? "Address not found"
-                                }
-                            }
                         }
                         .labelStyle(.iconOnly)
                         .cornerRadius(10)
@@ -166,9 +176,6 @@ struct EventEditView: View {
                         .onTapGesture { position in
                             if let coordinate = proxy.convert(position, from: .local) {
                                 selectedCoordinate = coordinate
-                                reverseGeocode(coordinate: coordinate) { addressString in
-                                    address = addressString ?? "Address not found"
-                                }
                             }
                         }
                         .frame(height: 250)
@@ -212,15 +219,6 @@ struct EventEditView: View {
                         Text("Update \(selectedSessionType)\(selectedSessionType == "Competition" ? "" : " session")")
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
-                }
-            }
-        }
-        .onAppear {
-            if address.isEmpty, let coord = selectedCoordinate {
-                reverseGeocode(coordinate: coord) { addressString in
-                    if let addressString = addressString {
-                        address = addressString
-                    }
                 }
             }
         }
@@ -294,44 +292,17 @@ struct EventEditView: View {
         }
     }
     
-    func reverseGeocode(coordinate: CLLocationCoordinate2D, completion: @escaping (String?) -> Void) {
-            let geocoder = CLGeocoder()
-            let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-            
-            geocoder.reverseGeocodeLocation(location) { placemarks, error in
-                guard let placemark = placemarks?.first, error == nil else {
-                    completion(nil)
-                    return
-                }
-                
-                let addressComponents = [
-                    placemark.subThoroughfare, // Street number
-                    placemark.thoroughfare,    // Street name
-                    placemark.locality,        // City
-                    placemark.administrativeArea, // State
-                    placemark.postalCode,      // ZIP
-                    placemark.country          // Country
-                ]
-                
-                let addressString = addressComponents
-                    .compactMap { $0 }
-                    .joined(separator: ", ")
-                
-                completion(addressString)
-            }
-        }
-    
     private func createSession() {
         withAnimation {
             switch selectedSessionType {
                 case "Coaching":
-                    let newItem = CoachingSession(dateTime: selectedDate, coachName: coachName, goals: goals, reflection: reflection, location: selectedCoordinate)
+                let newItem = CoachingSession(dateTime: selectedDate, coachName: coachName, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)
                 case "Competition":
-                let newItem = Competition(dateTime: selectedDate, name: competitionName, cost: cost, score: score, round: selectedRound, goals: goals, reflection: reflection, location: selectedCoordinate)
+                let newItem = Competition(dateTime: selectedDate, name: competitionName, cost: cost, score: score, round: selectedRound, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)
                 default:
-                    let newItem = TrainingSession(dateTime: selectedDate, goals: goals, reflection: reflection, location: selectedCoordinate)
+                    let newItem = ShootingSession(dateTime: selectedDate, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)
             }
         }
@@ -341,5 +312,5 @@ struct EventEditView: View {
 
 #Preview {
     EventEditView()
-        .modelContainer(for: [TrainingSession.self, CoachingSession.self, Competition.self], inMemory: true)
+        .modelContainer(for: [ShootingSession.self, CoachingSession.self, Competition.self], inMemory: true)
 }

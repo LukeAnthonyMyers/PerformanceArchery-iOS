@@ -13,7 +13,6 @@ struct GoldGameView: View {
             Color.yellow
             
             Label("Work in progress", systemImage: "smallcircle.circle")
-                    .foregroundColor(Color.black)
                     .font(.system(size: 20))
         }
     }
