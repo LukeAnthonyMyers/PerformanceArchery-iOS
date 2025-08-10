@@ -17,7 +17,7 @@ struct TrainingLogView: View {
             List {
                 ForEach(trainingSessions) { session in
                     NavigationLink {
-                        Text("Training session on \(session.dateTime, format: Date.FormatStyle(date: .numeric, time: .shortened))")
+                        Text("Training session on \(session.timestamp, format: Date.FormatStyle(date: .numeric, time: .shortened))")
                         
                         Spacer()
                         
@@ -59,7 +59,7 @@ struct TrainingLogView: View {
                         
                         Spacer()
                     } label: {
-                        Text(session.dateTime, format: Date.FormatStyle(date: .long, time: .shortened))
+                        Text(session.timestamp, format: Date.FormatStyle(date: .long, time: .shortened))
                         Text("Shots: " + String(session.arrowCount))
                     }
                 }
