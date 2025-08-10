@@ -14,7 +14,7 @@ struct AnyEvent: Identifiable {
     let type: CalendarView.EventType
     let base: Any
 
-    init(_ training: TrainingSession) {
+    init(_ training: ShootingSession) {
         self.id = training.id
         self.dateTime = training.dateTime
         self.type = .training
@@ -81,6 +81,18 @@ struct CalendarView: View {
             .filter { isEventTypeVisible($0.type) }
             .sorted { $0.dateTime < $1.dateTime }
     }
+    
+    var eventsByMonth: [(key: Date, value: [AnyEvent])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: combinedEvents) { event in
+            calendar.date(from: calendar.dateComponents([.year, .month], from: event.dateTime))!
+        }
+        let sorted = grouped.sorted { $0.key < $1.key }
+
+        return sorted.map { (key, events) in
+            (key, events.sorted { $0.dateTime < $1.dateTime })
+        }
+    }
 
     @State private var eventTypes = EventType.allCases.map { EventCategory(type: $0, show: true) }
 
@@ -89,7 +101,7 @@ struct CalendarView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var coachingSessions: [CoachingSession]
     @Query private var competitions: [Competition]
-    @Query private var trainingSessions: [TrainingSession]
+    @Query private var trainingSessions: [ShootingSession]
 
     var body: some View {
         VStack {
@@ -106,7 +118,7 @@ struct CalendarView: View {
                                 .frame(width: 25, height: 25)
                                 .overlay(
                                     Circle()
-                                        .stroke(Color.gray, lineWidth: 1)
+                                        .stroke(Color.gray, lineWidth: 0.5)
                                 )
                             
                             Image(systemName: "checkmark")
@@ -130,30 +142,69 @@ struct CalendarView: View {
             
             NavigationSplitView {
                 List {
-                    Section(header: Text("All Events")) {
-                        ForEach(combinedEvents) { event in
-                            NavigationLink {
-                                if let training = event.base as? TrainingSession {
-                                    EventEditView(event: training)
-                                } else if let coaching = event.base as? CoachingSession {
-                                    EventEditView(event: coaching)
-                                } else if let competition = event.base as? Competition {
-                                    EventEditView(event: competition)
-                                }
-                            } label: {
-                                HStack {
-                                    Circle()
-                                        .fill(event.type.colour)
-                                        .frame(width: 10, height: 10)
-                                    Text(event.dateTime, format: Date.FormatStyle(date: .long))
-                                    Spacer()
-                                    Text(event.type.displayName)
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
+                    ForEach(eventsByMonth, id: \.key) { month, events in
+                        Section(header: Text(month.formatted(.dateTime.year().month()))) {
+                            ForEach(events) { event in
+                                NavigationLink {
+                                    if let training = event.base as? ShootingSession {
+                                        EventEditView(event: training)
+                                    } else if let coaching = event.base as? CoachingSession {
+                                        EventEditView(event: coaching)
+                                    } else if let competition = event.base as? Competition {
+                                        EventEditView(event: competition)
+                                    }
+                                } label: {
+                                    switch event.type.displayName {
+                                        case "Coaching Session":
+                                            HStack {
+                                                Circle()
+                                                    .fill(event.type.colour)
+                                                    .frame(width: 10, height: 10)
+                                                Text(ordinalDay(from: event.dateTime))
+                                                    .font(.headline)
+                                                if let session = event.base as? CoachingSession {
+                                                    Text("Coaching with \(session.coachName)")
+                                                }
+                                                Spacer()
+                                                Text(event.type.displayName)
+                                                    .font(.caption)
+                                                    .foregroundColor(.gray)
+                                            }
+                                        case "Competition":
+                                            HStack {
+                                                Circle()
+                                                    .fill(event.type.colour)
+                                                    .frame(width: 10, height: 10)
+                                                Text(ordinalDay(from: event.dateTime))
+                                                    .font(.headline)
+                                                if let competition = event.base as? Competition {
+                                                    Text(competition.name)
+                                                }
+                                                Spacer()
+                                                Text(event.type.displayName)
+                                                    .font(.caption)
+                                                    .foregroundColor(.gray)
+                                            }
+                                        default:
+                                            HStack {
+                                                Circle()
+                                                    .fill(event.type.colour)
+                                                    .frame(width: 10, height: 10)
+                                                Text(ordinalDay(from: event.dateTime))
+                                                    .font(.headline)
+                                                Spacer()
+                                                Text(event.type.displayName)
+                                                    .font(.caption)
+                                                    .foregroundColor(.gray)
+                                            }
+                                    }
                                 }
                             }
+                            .onDelete { indexSet in
+                                let eventsToDelete = indexSet.map { events[$0] }
+                                deleteEvents(eventsToDelete)
+                            }
                         }
-                        .onDelete(perform: deleteEvents)
                     }
                 }
                 .offset(y: -30)
@@ -180,22 +231,21 @@ struct CalendarView: View {
         }
     }
     
-    private func deleteEvents(at offsets: IndexSet) {
-        for index in offsets {
-            let event = combinedEvents[index]
+    private func deleteEvents(_ events: [AnyEvent]) {
+        for event in events {
             switch event.type {
-            case .training:
-                if let training = event.base as? TrainingSession {
-                    modelContext.delete(training)
-                }
-            case .coaching:
-                if let coaching = event.base as? CoachingSession {
-                    modelContext.delete(coaching)
-                }
-            case .competitions:
-                if let competition = event.base as? Competition {
-                    modelContext.delete(competition)
-                }
+                case .training:
+                    if let training = event.base as? ShootingSession {
+                        modelContext.delete(training)
+                    }
+                case .coaching:
+                    if let coaching = event.base as? CoachingSession {
+                        modelContext.delete(coaching)
+                    }
+                case .competitions:
+                    if let competition = event.base as? Competition {
+                        modelContext.delete(competition)
+                    }
             }
         }
         
@@ -209,9 +259,16 @@ struct CalendarView: View {
     func isEventTypeVisible(_ type: EventType) -> Bool {
         eventTypes.first(where: { $0.type == type })?.show ?? false
     }
+    
+    func ordinalDay(from date: Date) -> String {
+        let day = Calendar.current.component(.day, from: date)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .ordinal
+        return formatter.string(from: NSNumber(value: day)) ?? "\(day)"
+    }
 }
 
 #Preview {
     CalendarView()
-        .modelContainer(for: [TrainingSession.self, CoachingSession.self, Competition.self], inMemory: true)
+        .modelContainer(for: [ShootingSession.self, CoachingSession.self, Competition.self], inMemory: true)
 }

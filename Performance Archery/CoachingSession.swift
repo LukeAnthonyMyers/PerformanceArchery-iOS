@@ -21,6 +21,7 @@ final class CoachingSession {
     var goals: String
     var reflection: String
     
+    var locationName: String
     var location: CLLocationCoordinate2D? {
         get {
             guard let lat = latitude, let lon = longitude else { return nil }
@@ -32,13 +33,14 @@ final class CoachingSession {
         }
     }
     
-    init(id: UUID = UUID(), dateTime: Date, arrowCount: UInt = 0, coachName: String, goals: String, reflection: String, location: CLLocationCoordinate2D?) {
+    init(id: UUID = UUID(), dateTime: Date, arrowCount: UInt = 0, coachName: String, goals: String, reflection: String, locationName: String, location: CLLocationCoordinate2D?) {
         self.id = id
         
         self.arrowCount = arrowCount
         self.coachName = coachName
         
         self.dateTime = dateTime
+        self.locationName = locationName
         self.latitude = location?.latitude
         self.longitude = location?.longitude
         self.goals = goals

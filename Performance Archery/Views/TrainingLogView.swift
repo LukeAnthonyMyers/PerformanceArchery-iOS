@@ -10,56 +10,14 @@ import SwiftData
 
 struct TrainingLogView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var trainingSessions: [TrainingSession]
+    @Query private var trainingSessions: [ShootingSession]
     
     var body: some View {
-        NavigationSplitView {
+        NavigationStack {
             List {
                 ForEach(trainingSessions) { session in
-                    NavigationLink {
-                        Text("Training session on \(session.timestamp, format: Date.FormatStyle(date: .numeric, time: .shortened))")
-                        
-                        Spacer()
-                        
-                        HStack(spacing: 50) {
-                            VStack {
-                                Text("Shots\n\(session.arrowCount)").font(.system(size: 30))
-                                    .multilineTextAlignment(.center)
-                                Button(action: {
-                                    session.arrowCount += 1
-                                }) {
-                                    Label("Increment", systemImage: "plus")
-                                }
-                                Button(action: {
-                                    if session.arrowCount > 0 {
-                                        session.arrowCount -= 1
-                                    }
-                                }) {
-                                    Label("Decrement", systemImage: "minus")
-                                }
-                            }
-                            
-                            VStack {
-                                Text("Come Downs\n\(session.comeDowns)").font(.system(size: 30))
-                                    .multilineTextAlignment(.center)
-                                Button(action: {
-                                    session.comeDowns += 1
-                                }) {
-                                    Label("Increment", systemImage: "plus")
-                                }
-                                Button(action: {
-                                    if session.comeDowns > 0 {
-                                        session.comeDowns -= 1
-                                    }
-                                }) {
-                                    Label("Decrement", systemImage: "minus")
-                                }
-                            }
-                        }
-                        
-                        Spacer()
-                    } label: {
-                        Text(session.timestamp, format: Date.FormatStyle(date: .long, time: .shortened))
+                    NavigationLink(value: session) {
+                        Text(session.dateTime, format: Date.FormatStyle(date: .long, time: .omitted))
                         Text("Shots: " + String(session.arrowCount))
                     }
                 }
@@ -76,16 +34,21 @@ struct TrainingLogView: View {
                 }
             }
             .navigationTitle("Training Log")
-        } detail: {
-            Text("Select an item")
+            .navigationDestination(for: ShootingSession.self) { session in
+                ShootingSessionView(session: session)
+            }
         }
     }
     
     private func addItem() {
-//        withAnimation {
-//            let newItem = TrainingSession(dateTime: Date())
-//            modelContext.insert(newItem)
-//        }
+        let session = ShootingSession(
+            dateTime: Date(),
+            goals: "",
+            reflection: "",
+            locationName: "",
+            location: nil
+        )
+        modelContext.insert(session)
     }
     
     private func deleteItems(offsets: IndexSet) {
@@ -99,5 +62,5 @@ struct TrainingLogView: View {
 
 #Preview {
     TrainingLogView()
-        .modelContainer(for: TrainingSession.self, inMemory: true)
+        .modelContainer(for: ShootingSession.self, inMemory: true)
 }
