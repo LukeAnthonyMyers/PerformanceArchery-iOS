@@ -21,7 +21,7 @@ struct ContentView: View {
                 }
             TrainingLogView()
                 .tabItem() {
-                    Label("Training Log", systemImage: "list.bullet")
+                    Label("Training Log", systemImage: "list.bullet.clipboard")
                 }
         }
     }

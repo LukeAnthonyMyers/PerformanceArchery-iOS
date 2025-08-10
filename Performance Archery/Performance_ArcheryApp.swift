@@ -12,7 +12,9 @@ import SwiftData
 struct Performance_ArcheryApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            TrainingSession.self,
+            ShootingSession.self,
+            FixedDistanceShooting.self,
+            CompetitionRound.self,
             CoachingSession.self,
             Competition.self,
         ])

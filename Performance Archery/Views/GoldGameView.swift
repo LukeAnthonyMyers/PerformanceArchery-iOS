@@ -22,6 +22,20 @@ struct GoldGameView: View {
         ["2", "1", "M"],
     ]
     
+    @State var original: Bool
+    
+    @State private var score: Int = 0
+    @State private var arrows: UInt = 0
+    @State private var value: Int = 0
+    @State private var bgColor: Color = Color.gray.opacity(0.3)
+    
+    let buttons = [
+        ["X", "10", "9"],
+        ["8", "7", "6"],
+        ["5", "4", "3"],
+        ["2", "1", "M"],
+    ]
+    
     var body: some View {
         VStack {
             Text("Arrows shot: \(arrows)")
