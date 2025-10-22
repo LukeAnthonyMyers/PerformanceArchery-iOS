@@ -46,11 +46,13 @@ struct TimerView: View {
     @State private var totalPhaseDuration: Int = 0
     @State private var isRunning: Bool = true
     @State private var phaseStartDate: Date = .now
+    @State private var pausedElapsed: Double? = nil
     
     @StateObject private var tonePlayer = AVEngineTonePlayer()
     @State private var lastBeepSecond: Int = -1
 
     private func startPhase(_ newPhase: Phase) {
+        pausedElapsed = nil
         phase = newPhase
         phaseStartDate = .now
         switch newPhase {
@@ -68,6 +70,7 @@ struct TimerView: View {
             totalPhaseDuration = 1
             isRunning = false
         }
+        lastBeepSecond = -1
     }
 
     private func advance() {
@@ -97,14 +100,41 @@ struct TimerView: View {
         }
     }
 
+    private func resetCurrentPhaseToStart() {
+        switch phase {
+        case .startDelay:
+            startPhase(.startDelay)
+        case .work:
+            startPhase(.work)
+        case .rest:
+            startPhase(.rest)
+        case .finished:
+            break
+        }
+    }
+
     private func progress(currentDate: Date = .now) -> Double {
         guard totalPhaseDuration > 0 else { return 0 }
-        let elapsed = isRunning ? max(0, currentDate.timeIntervalSince(phaseStartDate)) : Double(totalPhaseDuration - remaining)
+        let elapsed: Double
+        if isRunning {
+            elapsed = max(0, currentDate.timeIntervalSince(phaseStartDate))
+        } else if let paused = pausedElapsed {
+            elapsed = max(0, paused)
+        } else {
+            elapsed = max(0, Double(totalPhaseDuration - remaining))
+        }
         return min(1, max(0, elapsed / Double(totalPhaseDuration)))
     }
 
     private func computedRemaining(currentDate: Date = .now) -> Int {
-        let elapsed = isRunning ? currentDate.timeIntervalSince(phaseStartDate) : Double(totalPhaseDuration - remaining)
+        let elapsed: Double
+        if isRunning {
+            elapsed = currentDate.timeIntervalSince(phaseStartDate)
+        } else if let paused = pausedElapsed {
+            elapsed = paused
+        } else {
+            elapsed = Double(totalPhaseDuration - remaining)
+        }
         let left = Double(totalPhaseDuration) - elapsed
         return max(0, Int(ceil(left)))
     }
@@ -173,13 +203,30 @@ struct TimerView: View {
                     }
                 }
 
-                Button(action: { isRunning.toggle() }) {
-                    Image(systemName: isRunning ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 100, weight: .regular))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.primary)
+                GeometryReader { geo in
+                    ZStack {
+                        Button(action: { isRunning.toggle() }) {
+                            Image(systemName: isRunning ? "pause.circle.fill" : "play.circle.fill")
+                                .font(.system(size: 100, weight: .regular))
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(.primary)
+                        }
+                        .accessibilityLabel(isRunning ? "Pause" : "Resume")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+
+                        Button(action: {
+                            resetCurrentPhaseToStart()
+                        }) {
+                            Image(systemName: "backward.end.circle.fill")
+                                .font(.system(size: 64, weight: .regular))
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(.primary)
+                        }
+                        .accessibilityLabel("Skip Back")
+                        .position(x: geo.size.width / 4, y: geo.size.height / 2)
+                    }
                 }
-                .accessibilityLabel(isRunning ? "Pause" : "Resume")
+                .frame(height: 120)
 
                 Spacer()
             }
@@ -196,9 +243,14 @@ struct TimerView: View {
         }
         .onChange(of: isRunning) { _, running in
             if running {
-                phaseStartDate = .now
+                if let paused = pausedElapsed {
+                    phaseStartDate = Date().addingTimeInterval(-paused)
+                } else {
+                    phaseStartDate = .now
+                }
+                pausedElapsed = nil
             } else {
-                remaining = totalPhaseDuration
+                pausedElapsed = max(0, Date().timeIntervalSince(phaseStartDate))
             }
         }
         .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
@@ -211,7 +263,29 @@ struct TimerView: View {
             }
 
             if isRunning && progress() >= 1.0 {
-                tonePlayer.playFinishBeep()
+                let willFinish: Bool = {
+                    switch phase {
+                    case .startDelay:
+                        return false
+                    case .work:
+                        if currentRep < totalReps && restSeconds > 0 {
+                            return false
+                        } else {
+                            return currentRep >= totalReps
+                        }
+                    case .rest:
+                        return currentRep >= totalReps
+                    case .finished:
+                        return false
+                    }
+                }()
+
+                if willFinish {
+                    tonePlayer.playCompletionBeeps()
+                } else {
+                    tonePlayer.playFinishBeep()
+                }
+                lastBeepSecond = -1
                 advance()
             }
         }
@@ -290,6 +364,7 @@ final class AVEngineTonePlayer: ObservableObject {
         }
 
         player.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
+
         if !player.isPlaying {
             player.play()
         }
@@ -314,8 +389,13 @@ final class AVEngineTonePlayer: ObservableObject {
     func playFinishBeep() {
         playTone(frequency: 1500, duration: 0.25)
     }
+    
+    func playCompletionBeeps() {
+        playTone(frequency: 1000, duration: 0.125)
+        playTone(frequency: 1600, duration: 0.125)
+    }
 }
 
 #Preview {
-    TimerView(workSeconds: 10, restSeconds: 5, totalReps: 3, startDelaySeconds: 5)
+    TimerView(workSeconds: 5, restSeconds: 5, totalReps: 2, startDelaySeconds: 0)
 }
