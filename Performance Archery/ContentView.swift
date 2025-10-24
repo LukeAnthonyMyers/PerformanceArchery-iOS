@@ -19,6 +19,10 @@ struct ContentView: View {
                 .tabItem() {
                     Label("Activities", systemImage: "figure.archery")
                 }
+            ToolsView()
+                .tabItem() {
+                    Label("Tools", systemImage: "wrench.and.screwdriver.fill")
+                }
             TrainingLogView()
                 .tabItem() {
                     Label("Training Log", systemImage: "list.bullet.clipboard")
