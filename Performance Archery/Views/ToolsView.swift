@@ -10,6 +10,7 @@ import SwiftUI
 struct ToolsView: View {
     enum ToolType {
             case intervalTimer
+            case videoDelay
         }
 
         struct ToolItem: Identifiable {
@@ -20,7 +21,8 @@ struct ToolsView: View {
         }
 
         let tools: [ToolItem] = [
-            .init(title: "Interval Timer", systemImage: "timer", type: .intervalTimer)
+            .init(title: "Interval Timer", systemImage: "timer", type: .intervalTimer),
+            .init(title: "Video Delay", systemImage: "video", type: .videoDelay)
         ]
     var body: some View {
         NavigationStack {
@@ -40,6 +42,7 @@ struct ToolsView: View {
     private func destination(for type: ToolType) -> some View {
         switch type {
             case .intervalTimer: IntervalTimerSettingsView()
+            case .videoDelay: VideoDelayView()
         }
     }
 }
