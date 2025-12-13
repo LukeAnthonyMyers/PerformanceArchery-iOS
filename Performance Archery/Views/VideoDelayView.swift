@@ -14,6 +14,9 @@ struct VideoDelayView: View {
     @State private var delay: Double = 0
     @State private var isShowingControls: Bool = true
     @State private var authStatus: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
+    @State private var isLooping: Bool = false
+    @State private var isLoopPaused: Bool = false
+    @State private var scrubIndex: Double = 0
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -35,12 +38,14 @@ struct VideoDelayView: View {
         }
         .onAppear {
             camera.setDelay(seconds: delay)
+            camera.setLoopLength(seconds: delay)
             if authStatus == .authorized { camera.startIfAuthorized() }
         }
-        .onDisappear { camera.stop() }
+        .onDisappear { camera.stop(); camera.stopLooping() }
         .onChange(of: delay) { _, newValue in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak camera] in
                 camera?.setDelay(seconds: newValue)
+                camera?.setLoopLength(seconds: newValue)
             }
         }
         .onChange(of: authStatus) { _, newStatus in
@@ -66,7 +71,31 @@ struct VideoDelayView: View {
                         .padding(12)
                         .background(.ultraThinMaterial, in: Circle())
                 }
-                Spacer()
+                
+                if camera.hasPrimedLoop {
+                    Spacer()
+                    Button(action: {
+                        isLooping.toggle()
+                        if isLooping {
+                            isLoopPaused = false
+                            scrubIndex = 0
+                            camera.startLooping()
+                        } else {
+                            isLoopPaused = false
+                            camera.stopLooping()
+                        }
+                    }) {
+                        Image(systemName: isLooping ? "repeat.circle.fill" : "repeat.circle")
+                            .font(.system(size: 24, weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .padding(10)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    Spacer()
+                } else {
+                    Spacer()
+                }
+
                 Text(String(format: "%ds", Int(delay)))
                     .font(.system(.title3, weight: .semibold))
                     .padding(8)
@@ -79,15 +108,65 @@ struct VideoDelayView: View {
                 Slider(
                     value: Binding(
                         get: { delay },
-                        set: { delay = max(0, min(20, $0.rounded())) }
+                        set: { delay = max(0, min(15, $0.rounded())) }
                     ),
-                    in: 0...20,
+                    in: 0...15,
                     step: 1
                 )
                 Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
             }
             .padding(.horizontal)
             .padding(.bottom, 8)
+            .disabled(isLooping)
+            
+            if isLooping {
+                HStack(spacing: 12) {
+                    Button(action: {
+                        if isLoopPaused {
+                            isLoopPaused = false
+                            camera.resumeLooping()
+                        } else {
+                            let current = camera.currentLoopIndex()
+                            scrubIndex = Double(current)
+                            camera.scrubLoop(to: current)
+                            camera.pauseLooping()
+                            isLoopPaused = true
+                        }
+                    }) {
+                        Image(systemName: isLoopPaused ? "play.circle.fill" : "pause.circle.fill")
+                            .font(.system(size: 28, weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .padding(6)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+
+                    Slider(
+                        value: Binding(
+                            get: {
+                                isLoopPaused ? scrubIndex : Double(camera.currentLoopIndex())
+                            },
+                            set: { newVal in
+                                scrubIndex = newVal
+                                if isLoopPaused {
+                                    camera.scrubLoop(to: Int(newVal))
+                                }
+                            }
+                        ),
+                        in: 0...Double(max(0, camera.loopFrameCount() - 1)),
+                        step: 1,
+                        onEditingChanged: { editing in
+                            if editing {
+                                camera.pauseLooping()
+                                isLoopPaused = true
+                            } else {
+                                camera.scrubLoop(to: Int(scrubIndex))
+                            }
+                        }
+                    )
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+            }
             
             if camera.isPriming {
                 GeometryReader { geo in
@@ -165,6 +244,8 @@ final class DelayedCameraController: NSObject, ObservableObject {
     @Published var fallbackPixelBuffer: CVPixelBuffer?
     @Published var isPriming: Bool = false
     @Published var primingProgress: Double = 0
+    @Published var hasPrimedDelay: Bool = false
+    @Published var hasPrimedLoop: Bool = false
 
     private let videoOutput = AVCaptureVideoDataOutput()
     private let sessionQueue = DispatchQueue(label: "camera.session.queue")
@@ -172,7 +253,6 @@ final class DelayedCameraController: NSObject, ObservableObject {
     private var ring: [CVPixelBuffer?] = []
     private var ringCapacity: Int = 1
     private var writeIndex: Int = 0
-    private var hasPrimed: Bool = false
     private var pixelBufferPool: CVPixelBufferPool?
 
     private var targetDelaySeconds: Double = 0
@@ -181,8 +261,16 @@ final class DelayedCameraController: NSObject, ObservableObject {
 
     private var needsFallbackSnapshot: Bool = false
 
+    @Published var isLooping: Bool = false
+    private var loopFrames: [CVPixelBuffer] = []
+    private var loopIndex: Int = 0
+    private var loopTimer: DispatchSourceTimer?
+    private var loopTimerSuspended: Bool = false
+    private var loopFrameDuration: Double { max(1.0 / 60.0, min(1.0, averageFrameDuration)) }
+    private var loopLengthSeconds: Double = 0
+
     func setDelay(seconds: Double) {
-        targetDelaySeconds = max(0, min(20, seconds))
+        targetDelaySeconds = max(0, min(15, seconds))
         updateRingCapacityForDelay()
     }
 
@@ -191,6 +279,9 @@ final class DelayedCameraController: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             
+            self.stopLoopTimer()
+            DispatchQueue.main.async { self.isLooping = false }
+
             if !self.session.isRunning {
                 self.configureSession(position: .back)
                 self.session.startRunning()
@@ -201,6 +292,7 @@ final class DelayedCameraController: NSObject, ObservableObject {
     func stop() {
         sessionQueue.async { [weak self] in
             guard let self else { return }
+            self.stopLoopTimer()
             if self.session.isRunning { self.session.stopRunning() }
         }
     }
@@ -208,6 +300,10 @@ final class DelayedCameraController: NSObject, ObservableObject {
     func flipCamera() {
         sessionQueue.async { [weak self] in
             guard let self else { return }
+
+            self.stopLoopTimer()
+            self.isLooping = false
+
             guard let currentInput = self.session.inputs.first as? AVCaptureDeviceInput else { return }
 
             let newPosition: AVCaptureDevice.Position = (currentInput.device.position == .back) ? .front : .back
@@ -238,16 +334,137 @@ final class DelayedCameraController: NSObject, ObservableObject {
 
             self.needsFallbackSnapshot = true
             DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
+                guard let self = self else { return }
+                self.hasPrimedDelay = false
+                self.hasPrimedLoop = false
                 self.isPriming = self.ringCapacity > 1 && self.targetDelaySeconds > 0
                 self.primingProgress = 0
             }
         }
     }
 
+    func setLoopLength(seconds: Double) {
+        loopLengthSeconds = max(0, min(15, seconds))
+    }
+
+    func startLooping() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.captureLoopFrames()
+            guard !self.loopFrames.isEmpty else { return }
+            DispatchQueue.main.async { self.isLooping = true }
+            self.startLoopTimer()
+        }
+    }
+
+    func stopLooping() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            DispatchQueue.main.async { self.isLooping = false }
+            self.stopLoopTimer()
+            self.loopFrames.removeAll()
+            self.loopIndex = 0
+        }
+    }
+    
+    func pauseLooping() {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            guard let t = self.loopTimer, !self.loopTimerSuspended else { return }
+            t.suspend()
+            self.loopTimerSuspended = true
+        }
+    }
+
+    func resumeLooping() {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            guard self.isLooping else { return }
+
+            if self.loopTimer == nil {
+                self.startLoopTimer()
+            } else if self.loopTimerSuspended {
+                self.loopTimer?.resume()
+                self.loopTimerSuspended = false
+            }
+        }
+    }
+
+    func loopFrameCount() -> Int { loopFrames.count }
+    func currentLoopIndex() -> Int { loopIndex }
+
+    func scrubLoop(to index: Int) {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            guard !self.loopFrames.isEmpty else { return }
+            let clamped = max(0, min(index, self.loopFrames.count - 1))
+            self.loopIndex = clamped
+            let pb = self.loopFrames[clamped]
+            DispatchQueue.main.async { [weak self] in
+                self?.displayPixelBuffer = pb
+            }
+        }
+    }
+
+    private func captureLoopFrames() {
+        let fps = max(5.0, min(120.0, 1.0 / averageFrameDuration))
+        let framesForX = max(1, Int(round(loopLengthSeconds * fps)))
+        guard ring.count >= framesForX * 2 + 1 else { return }
+        let delayedReadIdx = (writeIndex - framesForX + ring.count) % ring.count
+        let startIdx = (delayedReadIdx - framesForX + ring.count) % ring.count
+        var frames: [CVPixelBuffer] = []
+        var idx = startIdx
+        var taken = 0
+
+        while taken < framesForX {
+            if let pb = ring[idx] {
+                frames.append(pb)
+            }
+
+            idx = (idx + 1) % ring.count
+            taken += 1
+        }
+
+        self.loopFrames = frames
+        self.loopIndex = 0
+    }
+
+    private func startLoopTimer() {
+        stopLoopTimer()
+        guard !loopFrames.isEmpty else { return }
+        let timer = DispatchSource.makeTimerSource(queue: sessionQueue)
+        let interval = max(loopFrameDuration, 1e-3)
+
+        timer.schedule(deadline: .now(), repeating: interval)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            guard self.isLooping, !self.loopFrames.isEmpty else { return }
+            let pb = self.loopFrames[self.loopIndex]
+            self.loopIndex = (self.loopIndex + 1) % self.loopFrames.count
+            DispatchQueue.main.async { [weak self] in
+                self?.displayPixelBuffer = pb
+            }
+        }
+
+        loopTimer = timer
+        loopTimerSuspended = false
+        timer.resume()
+    }
+
+    private func stopLoopTimer() {
+        if let t = loopTimer {
+            if loopTimerSuspended {
+                t.resume()
+                loopTimerSuspended = false
+            }
+            t.cancel()
+        }
+        loopTimer = nil
+    }
+
     private func configureSession(position: AVCaptureDevice.Position) {
         self.session.beginConfiguration()
-        self.session.sessionPreset = .high
+        self.session.sessionPreset = .hd1920x1080
 
         self.session.inputs.forEach { self.session.removeInput($0) }
         
@@ -259,7 +476,7 @@ final class DelayedCameraController: NSObject, ObservableObject {
 
         self.session.outputs.forEach { self.session.removeOutput($0) }
         self.videoOutput.alwaysDiscardsLateVideoFrames = false
-        self.videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        self.videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange]
         self.videoOutput.setSampleBufferDelegate(self, queue: self.sessionQueue)
         
         if self.session.canAddOutput(self.videoOutput) {
@@ -270,22 +487,22 @@ final class DelayedCameraController: NSObject, ObservableObject {
             connection.automaticallyAdjustsVideoMirroring = false
 
             switch position {
-            case .front:
-                if connection.isVideoMirroringSupported {
-                    connection.isVideoMirrored = true
-                }
-                
-                if connection.isVideoRotationAngleSupported(90) {
-                    connection.videoRotationAngle = 90
-                }
-            default:
-                if connection.isVideoMirroringSupported {
-                    connection.isVideoMirrored = false
-                }
-                
-                if connection.isVideoRotationAngleSupported(90) {
-                    connection.videoRotationAngle = 90
-                }
+                case .front:
+                    if connection.isVideoMirroringSupported {
+                        connection.isVideoMirrored = true
+                    }
+                    
+                    if connection.isVideoRotationAngleSupported(90) {
+                        connection.videoRotationAngle = 90
+                    }
+                default:
+                    if connection.isVideoMirroringSupported {
+                        connection.isVideoMirrored = false
+                    }
+                    
+                    if connection.isVideoRotationAngleSupported(90) {
+                        connection.videoRotationAngle = 90
+                    }
             }
         }
 
@@ -294,15 +511,17 @@ final class DelayedCameraController: NSObject, ObservableObject {
 
     private func updateRingCapacityForDelay() {
         let fps = max(5.0, min(120.0, 1.0 / averageFrameDuration))
-        let framesNeeded = Int(round(targetDelaySeconds * fps))
-        let newCapacity = max(1, framesNeeded)
+        let framesForX = Int(round(targetDelaySeconds * fps))
+        let framesNeeded = max(1, framesForX * 2 + 1)
+        let newCapacity = framesNeeded
         
         if newCapacity != ringCapacity || ring.isEmpty {
             ringCapacity = newCapacity
             ring = Array(repeating: nil, count: ringCapacity)
             writeIndex = 0
-            hasPrimed = false
             DispatchQueue.main.async { [weak self] in
+                self?.hasPrimedDelay = false
+                self?.hasPrimedLoop = false
                 self?.isPriming = (self?.ringCapacity ?? 1) > 1 && (self?.targetDelaySeconds ?? 0) > 0
                 self?.primingProgress = 0
             }
@@ -312,6 +531,11 @@ final class DelayedCameraController: NSObject, ObservableObject {
 
 extension DelayedCameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+
+        if isLooping {
+            return
+        }
+
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
         
         if pts.isFinite {
@@ -325,7 +549,12 @@ extension DelayedCameraController: AVCaptureVideoDataOutputSampleBufferDelegate 
 
         updateRingCapacityForDelay()
 
-        if ring.isEmpty { ring = Array(repeating: nil, count: ringCapacity); writeIndex = 0; hasPrimed = false }
+        if ring.isEmpty {
+            ring = Array(repeating: nil, count: ringCapacity)
+            writeIndex = 0
+            hasPrimedDelay = false
+            hasPrimedLoop = false
+        }
 
         guard let srcPB = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
@@ -353,14 +582,15 @@ extension DelayedCameraController: AVCaptureVideoDataOutputSampleBufferDelegate 
         if let pool = pixelBufferPool, let testAttrs = CVPixelBufferPoolGetPixelBufferAttributes(pool) as? [String: Any] {
             let w = (testAttrs[kCVPixelBufferWidthKey as String] as? Int) ?? 0
             let h = (testAttrs[kCVPixelBufferHeightKey as String] as? Int) ?? 0
-            needNewPool = (w != srcWidth || h != srcHeight)
+            let pixelFormat = (testAttrs[kCVPixelBufferPixelFormatTypeKey as String] as? Int) ?? 0
+            needNewPool = (w != srcWidth || h != srcHeight || pixelFormat != kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
         } else {
             needNewPool = true
         }
         
         if needNewPool {
             let attrs: [String: Any] = [
-                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
                 kCVPixelBufferWidthKey as String: srcWidth,
                 kCVPixelBufferHeightKey as String: srcHeight,
                 kCVPixelBufferIOSurfacePropertiesKey as String: [:]
@@ -370,7 +600,10 @@ extension DelayedCameraController: AVCaptureVideoDataOutputSampleBufferDelegate 
             pixelBufferPool = pool
             ring = Array(repeating: nil, count: ringCapacity)
             writeIndex = 0
-            hasPrimed = false
+            DispatchQueue.main.async { [weak self] in
+                self?.hasPrimedDelay = false
+                self?.hasPrimedLoop = false
+            }
         }
 
         var dstPB: CVPixelBuffer?
@@ -386,15 +619,46 @@ extension DelayedCameraController: AVCaptureVideoDataOutputSampleBufferDelegate 
 
         CVPixelBufferLockBaseAddress(srcPB, .readOnly)
         CVPixelBufferLockBaseAddress(targetPB, [])
-        let srcBytesPerRow = CVPixelBufferGetBytesPerRow(srcPB)
-        let dstBytesPerRow = CVPixelBufferGetBytesPerRow(targetPB)
+        
+        let planeCount = CVPixelBufferGetPlaneCount(srcPB)
+        if planeCount == 2 {
+            if let srcBase0 = CVPixelBufferGetBaseAddressOfPlane(srcPB, 0),
+               let dstBase0 = CVPixelBufferGetBaseAddressOfPlane(targetPB, 0) {
+                let height0 = CVPixelBufferGetHeightOfPlane(srcPB, 0)
+                let bytesPerRow0_src = CVPixelBufferGetBytesPerRowOfPlane(srcPB, 0)
+                let bytesPerRow0_dst = CVPixelBufferGetBytesPerRowOfPlane(targetPB, 0)
+                
+                for y in 0..<height0 {
+                    let srcPtr = srcBase0.advanced(by: y * bytesPerRow0_src)
+                    let dstPtr = dstBase0.advanced(by: y * bytesPerRow0_dst)
+                    memcpy(dstPtr, srcPtr, min(bytesPerRow0_src, bytesPerRow0_dst))
+                }
+            }
 
-        if let srcBase = CVPixelBufferGetBaseAddress(srcPB), let dstBase = CVPixelBufferGetBaseAddress(targetPB) {
-            let rowBytes = min(srcBytesPerRow, dstBytesPerRow)
-            for y in 0..<srcHeight {
-                let srcPtr = srcBase.advanced(by: y * srcBytesPerRow)
-                let dstPtr = dstBase.advanced(by: y * dstBytesPerRow)
-                memcpy(dstPtr, srcPtr, rowBytes)
+            if let srcBase1 = CVPixelBufferGetBaseAddressOfPlane(srcPB, 1),
+               let dstBase1 = CVPixelBufferGetBaseAddressOfPlane(targetPB, 1) {
+                let height1 = CVPixelBufferGetHeightOfPlane(srcPB, 1)
+                let bytesPerRow1_src = CVPixelBufferGetBytesPerRowOfPlane(srcPB, 1)
+                let bytesPerRow1_dst = CVPixelBufferGetBytesPerRowOfPlane(targetPB, 1)
+                for y in 0..<height1 {
+                    let srcPtr = srcBase1.advanced(by: y * bytesPerRow1_src)
+                    let dstPtr = dstBase1.advanced(by: y * bytesPerRow1_dst)
+                    memcpy(dstPtr, srcPtr, min(bytesPerRow1_src, bytesPerRow1_dst))
+                }
+            }
+        } else {
+            let srcBytesPerRow = CVPixelBufferGetBytesPerRow(srcPB)
+            let dstBytesPerRow = CVPixelBufferGetBytesPerRow(targetPB)
+            let srcHeight = CVPixelBufferGetHeight(srcPB)
+
+            if let srcBase = CVPixelBufferGetBaseAddress(srcPB), let dstBase = CVPixelBufferGetBaseAddress(targetPB) {
+                let rowBytes = min(srcBytesPerRow, dstBytesPerRow)
+
+                for y in 0..<srcHeight {
+                    let srcPtr = srcBase.advanced(by: y * srcBytesPerRow)
+                    let dstPtr = dstBase.advanced(by: y * dstBytesPerRow)
+                    memcpy(dstPtr, srcPtr, rowBytes)
+                }
             }
         }
 
@@ -404,16 +668,31 @@ extension DelayedCameraController: AVCaptureVideoDataOutputSampleBufferDelegate 
         ring[writeIndex] = targetPB
         writeIndex = (writeIndex + 1) % max(ring.count, 1)
 
-        if !hasPrimed {
-            let filled = ring.reduce(0) { $0 + ($1 == nil ? 0 : 1) }
-            let progress = ringCapacity > 0 ? Double(filled) / Double(ringCapacity) : 1
-            hasPrimed = (filled == ringCapacity)
+        let filled = ring.reduce(0) { $0 + ($1 == nil ? 0 : 1) }
+        let fpsNow = max(5.0, min(120.0, 1.0 / averageFrameDuration))
+        let framesForXNow = max(1, Int(round(targetDelaySeconds * fpsNow)))
+
+        if !hasPrimedDelay {
+            let progress = ringCapacity > 0 ? Double(min(filled, framesForXNow)) / Double(framesForXNow) : 1
             DispatchQueue.main.async { [weak self] in
-                self?.isPriming = !self!.hasPrimed
+                self?.isPriming = progress < 1 && (self?.targetDelaySeconds ?? 0) > 0
                 self?.primingProgress = min(max(progress, 0), 1)
             }
-            
-            if !hasPrimed { return }
+
+            if filled < framesForXNow { return }
+            DispatchQueue.main.async { [weak self] in
+                self?.hasPrimedDelay = true
+                self?.isPriming = false
+                self?.primingProgress = 1
+            }
+        }
+
+        if !hasPrimedLoop {
+            if filled >= min(ringCapacity, framesForXNow * 2 + 1) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.hasPrimedLoop = true
+                }
+            }
         }
 
         DispatchQueue.main.async { [weak self] in
@@ -422,7 +701,9 @@ extension DelayedCameraController: AVCaptureVideoDataOutputSampleBufferDelegate 
             self?.fallbackPixelBuffer = nil
         }
 
-        let readIdx = (writeIndex - ringCapacity + ring.count) % ring.count
+        let fps = max(5.0, min(120.0, 1.0 / averageFrameDuration))
+        let framesForX = max(1, Int(round(targetDelaySeconds * fps)))
+        let readIdx = (writeIndex - framesForX + ring.count) % ring.count
         
         if let pb = ring[readIdx] {
             DispatchQueue.main.async { [weak self] in
