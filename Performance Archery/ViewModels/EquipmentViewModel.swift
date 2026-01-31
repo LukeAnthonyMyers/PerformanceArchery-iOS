@@ -68,6 +68,19 @@ class EquipmentViewModel {
         return dist >= 0 && sight >= 0 && sight <= 100
     }
     
+    var chartXDomain: ClosedRange<Double> {
+        let distances = sightMarks.map { displayDistance($0.distanceMeters) }
+        
+        guard let minDist = distances.min(), let maxDist = distances.max() else {
+            return 0...100
+        }
+        
+        let lowerBound = max(0, minDist - 1)
+        let upperBound = (minDist == maxDist) ? (maxDist + 10) : maxDist
+        
+        return lowerBound...upperBound
+    }
+    
     func addSightMark() {
         guard let dist = inputDistance, let sight = inputSightValue else { return }
         

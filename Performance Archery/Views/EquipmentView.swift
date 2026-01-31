@@ -22,6 +22,7 @@ struct EquipmentView: View {
                     }
                     .pickerStyle(.segmented)
                 }
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
 
                 Section("Tiller") {
                     HStack {
@@ -31,6 +32,7 @@ struct EquipmentView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
 
                 Section("Bracing Height") {
                     HStack {
@@ -40,6 +42,7 @@ struct EquipmentView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
 
                 Section(header:
                     HStack {
@@ -61,10 +64,16 @@ struct EquipmentView: View {
                                         .interpolationMethod(.monotone)
                                 }
                             }
+                            .chartXScale(domain: viewModel.chartXDomain)
                             .chartXAxisLabel("Distance (\(viewModel.unitSystem.distanceUnitLabel))")
                             .chartYAxisLabel("Sight mark")
-                            .frame(minHeight: 220)
-                            .padding(.top, 8)
+                            .chartXAxis {
+                                AxisMarks(values: .stride(by: 10))
+                            }
+                            .chartYAxis {
+                                AxisMarks(values: .automatic(desiredCount: 10))
+                            }
+                            .frame(minHeight: 250)
                         }
                         
                         HStack {
