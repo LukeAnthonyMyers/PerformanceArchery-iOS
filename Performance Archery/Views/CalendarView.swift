@@ -5,8 +5,8 @@
 //  Created by Luke Myers on 05/01/2025.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct AnyEvent: Identifiable {
     let id: UUID
@@ -151,7 +151,7 @@ struct CalendarView: View {
                                     } else if let coaching = event.base as? CoachingSession {
                                         EventEditView(event: coaching)
                                     } else if let competition = event.base as? Competition {
-                                        EventEditView(event: competition)
+                                        CompetitionView(competition: competition)
                                     }
                                 } label: {
                                     switch event.type.displayName {

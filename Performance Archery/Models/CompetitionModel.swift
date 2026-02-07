@@ -1,11 +1,12 @@
 //
-//  Competition.swift
+//  CompetitionModel.swift
 //  Performance Archery
 //
 //  Created by Luke Myers on 27/04/2025.
 //
 
 import CoreLocation
+import Foundation
 import SwiftData
 
 @Model
@@ -36,6 +37,8 @@ final class Competition {
         }
     }
     
+    @Relationship(deleteRule: .cascade) var schedule: [ScheduleItem] = []
+    
     init(id: UUID = UUID(), dateTime: Date, name: String, cost: String, score: String = "0", arrowCount: UInt = 0, round: String, goals: String, reflection: String, locationName: String, location: CLLocationCoordinate2D?) {
         self.id = id
         
@@ -51,6 +54,8 @@ final class Competition {
         self.cost = cost
         self.score = score
         self.arrowCount = arrowCount
+        
+        self.schedule = []
     }
 }
 
@@ -77,5 +82,18 @@ final class CompetitionRound {
         self.comeDowns = comeDowns
         self.startTime = startTime
         self.score = score
+    }
+}
+
+@Model
+final class ScheduleItem {
+    var title: String
+    var dateTime: Date?
+    var index: Int
+    
+    init(title: String, dateTime: Date? = nil, index: Int) {
+        self.title = title
+        self.dateTime = dateTime
+        self.index = index
     }
 }
