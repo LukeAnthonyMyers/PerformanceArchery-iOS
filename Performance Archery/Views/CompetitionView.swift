@@ -21,19 +21,23 @@ struct CompetitionView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("\(competition.name)")
                 .font(.largeTitle)
                 .fontWeight(.bold)
             
-            Text(competition.dateTime.formatted(date: .complete, time: .omitted))
+            Text("\(competition.dateTime.formatted(date: .complete, time: .omitted)) at \(competition.locationName)")
+            Spacer()
+            Divider()
 
             List {
                 ForEach(viewModel.displayedSchedule, id: \.persistentModelID) { item in
-                    ScheduleRowView(item: item)
+                    ScheduleRowView(item: item, competition: competition, isRound: false)
                 }
                 .onDelete(perform: viewModel.deleteItems)
                 .onMove(perform: viewModel.moveItems)
+
+                ScheduleRowView(item: ScheduleItem(title: competition.rounds[0].roundType.name, index: 0), competition: competition, isRound: true)
             }
             .listStyle(.plain)
             .scrollDismissesKeyboard(.interactively)
@@ -62,27 +66,45 @@ struct CompetitionView: View {
 
 struct ScheduleRowView: View {
     @Bindable var item: ScheduleItem
+    @Bindable var competition: Competition
+    let isRound: Bool
 
     var body: some View {
         HStack(spacing: 15) {
             Rectangle()
-                .fill(.blue.opacity(0.3))
+                .fill(isRound ? .red.opacity(0.3) : .blue.opacity(0.3))
                 .frame(width: 2)
-
-            TextField("...", text: $item.title, axis: .vertical)
-                .font(.headline)
             
-            Spacer()
-            
-            DatePicker(
-                "Select Time",
-                selection: Binding<Date>(
-                    get: { item.dateTime ?? Date() },
-                    set: { item.dateTime = $0 }
-                ),
-                displayedComponents: .hourAndMinute
-            )
-            .labelsHidden()
+            if isRound {
+                HStack {
+                    Text(item.title)
+                        .font(.headline)
+                    
+                    Spacer()
+                    
+                    Text("Target assignment:")
+                        .font(.subheadline)
+                    
+                    TextField("...", text: $competition.rounds[0].targetAssignment)
+                        .font(.subheadline)
+                        .frame(width: 30)
+                }
+            } else {
+                TextField("...", text: $item.title, axis: .vertical)
+                    .font(.body)
+                
+                Spacer()
+                
+                DatePicker(
+                    "Select Time",
+                    selection: Binding<Date>(
+                        get: { item.dateTime ?? Date() },
+                        set: { item.dateTime = $0 }
+                    ),
+                    displayedComponents: .hourAndMinute
+                )
+                .labelsHidden()
+            }
         }
         .listRowSeparator(.hidden)
     }
@@ -93,11 +115,11 @@ struct ScheduleRowView: View {
         dateTime: Date(),
         name: "The Vegas Shoot",
         cost: "200",
-        round: "WA18",
+        rounds: [CompetitionRound(roundType: RoundType.archeryGB[3])],
         goals: "Improve consistency",
         reflection: "Shot well",
-        locationName: "Home",
-        location: nil
+        locationName: "Las Vegas, Nevada",
+        location: nil,
     )
 
     NavigationStack {

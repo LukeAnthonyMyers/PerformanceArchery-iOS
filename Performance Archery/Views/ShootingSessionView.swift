@@ -19,8 +19,7 @@ struct ShootingSessionView: View {
     let shootingTypes = ["Competition Round", "Fixed Distance"]
     @State private var selectedShootingType = "Competition Round"
     
-    let rounds = ["WA18", "WA25", "WA720", "WA900", "WA1440"]
-    @State private var selectedRound = "WA720"
+    @State private var selectedRound = RoundType.allRounds[0]
     
     @State private var startTime = Date()
     @State private var endTime = Date()
@@ -134,7 +133,7 @@ struct ShootingSessionView: View {
         var startTime: Date {
             switch self {
                 case .fixedDistance(let fd): return fd.startTime
-                case .competitionRound(let cr): return cr.startTime
+                case .competitionRound(let cr): return cr.startTime ?? Date()
             }
         }
     }
@@ -154,8 +153,8 @@ struct ShootingSessionView: View {
                             Text(fd.startTime.formatted(date: .omitted, time: .shortened)).bold()
                             Text("\(fd.targetFace) @ \(fd.distance)\(fd.metric ? "m" : "yds")")
                         case .competitionRound(let cr):
-                            Text(cr.startTime.formatted(date: .omitted, time: .shortened)).bold()
-                            Text("\(cr.name)")
+                            Text((cr.startTime ?? Date()).formatted(date: .omitted, time: .shortened)).bold()
+                            Text("\(cr.roundType.name)")
                     }
                 }
             }
@@ -192,7 +191,7 @@ struct ShootingSessionView: View {
                     }
                     Spacer()
                 case .competitionRound(let cr):
-                    Text("\(cr.name)")
+                Text("\(cr.roundType.name)")
             }
         }
         .toolbar {
@@ -239,8 +238,16 @@ struct ShootingSessionView: View {
                     }
                 } else {
                     Picker("Round", selection: $selectedRound) {
-                        ForEach(rounds, id: \.self) { round in
-                            Text(round)
+                        Section(header: Text("World Archery")) {
+                            ForEach(RoundType.worldArchery, id: \.self) { round in
+                                Text(round.name)
+                            }
+                        }
+                        
+                        Section(header: Text("Archery GB")) {
+                            ForEach(RoundType.archeryGB, id: \.self) { round in
+                                Text(round.name)
+                            }
                         }
                     }
                     .pickerStyle(.menu)
@@ -273,11 +280,8 @@ struct ShootingSessionView: View {
                     session.fixedDistanceShooting.append(newItem)
                 case "Competition Round":
                     let newItem = CompetitionRound(
-                        name: selectedRound,
-                        distances: [selectedDistance.num],
-                        metric: selectedDistance.isMetric,
-                        startTime: startTime,
-                        targetFaces: [selectedTarget.id]
+                        roundType: selectedRound,
+                        startTime: startTime
                     )
                     session.CompetitionRounds.append(newItem)
                 default:
@@ -304,3 +308,4 @@ struct ShootingSessionView: View {
     }
     .modelContainer(for: ShootingSession.self, inMemory: true)
 }
+

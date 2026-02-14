@@ -14,9 +14,8 @@ final class Competition {
     @Attribute(.unique) var id: UUID
     
     var name: String
-    var round: String
+    var rounds: [CompetitionRound]
     var cost: String
-    var score: String
     var arrowCount: UInt
     
     var dateTime: Date
@@ -39,7 +38,7 @@ final class Competition {
     
     @Relationship(deleteRule: .cascade) var schedule: [ScheduleItem] = []
     
-    init(id: UUID = UUID(), dateTime: Date, name: String, cost: String, score: String = "0", arrowCount: UInt = 0, round: String, goals: String, reflection: String, locationName: String, location: CLLocationCoordinate2D?) {
+    init(id: UUID = UUID(), dateTime: Date, name: String, cost: String, arrowCount: UInt = 0, rounds: [CompetitionRound], goals: String, reflection: String, locationName: String, location: CLLocationCoordinate2D?) {
         self.id = id
         
         self.dateTime = dateTime
@@ -50,38 +49,11 @@ final class Competition {
         
         self.name = name
         self.locationName = locationName
-        self.round = round
+        self.rounds = rounds
         self.cost = cost
-        self.score = score
         self.arrowCount = arrowCount
         
         self.schedule = []
-    }
-}
-
-@Model
-final class CompetitionRound {
-    @Attribute(.unique) var id: UUID
-    
-    var name: String
-    var distances: [UInt8]
-    var metric: Bool
-    var targetFaces: [String]
-    var arrowCount: UInt
-    var comeDowns: UInt
-    var startTime: Date
-    var score: UInt8
-
-    init(id: UUID = UUID(), name: String, distances: [UInt8], metric: Bool, startTime: Date, targetFaces: [String], arrowCount: UInt = 0, comeDowns: UInt = 0, score: UInt8 = 0) {
-        self.id = id
-        self.name = name
-        self.distances = distances
-        self.metric = metric
-        self.targetFaces = targetFaces
-        self.arrowCount = arrowCount
-        self.comeDowns = comeDowns
-        self.startTime = startTime
-        self.score = score
     }
 }
 
@@ -95,5 +67,47 @@ final class ScheduleItem {
         self.title = title
         self.dateTime = dateTime
         self.index = index
+    }
+}
+
+@Model
+final class CompetitionRound {
+    @Attribute(.unique) var id: UUID
+    
+    var roundType: RoundType
+    var arrowCount: UInt8
+    var comeDowns: UInt8
+    var startTime: Date?
+    var score: String
+    var targetAssignment: String
+
+    init(id: UUID = UUID(), roundType: RoundType, startTime: Date? = nil, arrowCount: UInt8 = 0, comeDowns: UInt8 = 0, score: String = "", targetAssignment: String = "") {
+        self.id = id
+        self.roundType = roundType
+        self.arrowCount = arrowCount
+        self.comeDowns = comeDowns
+        self.startTime = startTime
+        self.score = score
+        self.targetAssignment = targetAssignment
+    }
+}
+
+struct RoundType: Hashable, Codable {
+    var id: String { name }
+
+    var name: String
+    var distances: [UInt8]
+    var isMetric: Bool
+    var isIndoor: Bool
+    var targetFaces: [String]
+    var arrowCounts: [UInt8]
+
+    init(name: String, distances: [UInt8], isMetric: Bool, isIndoor: Bool, targetFaces: [String], arrowCounts: [UInt8]) {
+        self.name = name
+        self.distances = distances
+        self.isMetric = isMetric
+        self.isIndoor = isIndoor
+        self.targetFaces = targetFaces
+        self.arrowCounts = arrowCounts
     }
 }

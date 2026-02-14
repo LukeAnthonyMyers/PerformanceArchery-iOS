@@ -52,8 +52,7 @@ struct EventEditView: View {
     let trainingTypes = ["Shooting", "SPT", "S&C"]
     @State private var selectedTrainingType = "Shooting"
     
-    let rounds = ["WA18", "WA25", "WA720", "WA900", "WA1440"]
-    @State private var selectedRound = "WA720"
+    @State private var selectedRound = RoundType.allRounds[0]
     
     init(event: (any Event & AnyObject)? = nil) {
         self.event = event
@@ -78,8 +77,8 @@ struct EventEditView: View {
                 _selectedSessionType = State(initialValue: "Competition")
                 _competitionName = State(initialValue: competition.name)
                 _cost = State(initialValue: String(competition.cost))
-                _selectedRound = State(initialValue: String(competition.round))
-                _score = State(initialValue: String(competition.score))
+                _selectedRound = State(initialValue: competition.rounds[0].roundType)
+                _score = State(initialValue: String(competition.rounds[0].score))
                 _goals = State(initialValue: competition.goals)
                 _reflection = State(initialValue: competition.reflection)
             } else if let coachingSession = event as? CoachingSession {
@@ -137,8 +136,16 @@ struct EventEditView: View {
                     }
                     
                     Picker("Round", selection: $selectedRound) {
-                        ForEach(rounds, id: \.self) { round in
-                            Text(round)
+                        Section(header: Text("World Archery")) {
+                            ForEach(RoundType.worldArchery, id: \.self) { round in
+                                Text(round.name)
+                            }
+                        }
+                        
+                        Section(header: Text("Archery GB")) {
+                            ForEach(RoundType.archeryGB, id: \.self) { round in
+                                Text(round.name)
+                            }
                         }
                     }
                     .pickerStyle(.menu)
@@ -251,6 +258,7 @@ struct EventEditView: View {
         existingEvent.dateTime = selectedDate
         existingEvent.goals = goals
         existingEvent.reflection = reflection
+        existingEvent.locationName = address
         if let coord = selectedCoordinate {
             existingEvent.latitude = coord.latitude
             existingEvent.longitude = coord.longitude
@@ -259,8 +267,8 @@ struct EventEditView: View {
         if let competition = existingEvent as? Competition {
             competition.name = competitionName
             competition.cost = cost
-            competition.round = selectedRound
-            competition.score = score
+            competition.rounds[0].roundType = selectedRound
+            competition.rounds[0].score = score
         } else if let coachingSession = existingEvent as? CoachingSession {
             coachingSession.coachName = coachName
         }
@@ -296,10 +304,10 @@ struct EventEditView: View {
         withAnimation {
             switch selectedSessionType {
                 case "Coaching":
-                let newItem = CoachingSession(dateTime: selectedDate, coachName: coachName, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
+                    let newItem = CoachingSession(dateTime: selectedDate, coachName: coachName, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)
                 case "Competition":
-                let newItem = Competition(dateTime: selectedDate, name: competitionName, cost: cost, score: score, round: selectedRound, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
+                    let newItem = Competition(dateTime: selectedDate, name: competitionName, cost: cost, rounds: [CompetitionRound(roundType: selectedRound)], goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)
                 default:
                     let newItem = ShootingSession(dateTime: selectedDate, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
