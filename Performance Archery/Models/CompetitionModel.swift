@@ -18,7 +18,10 @@ final class Competition {
     var cost: String
     var arrowCount: UInt
     
-    var dateTime: Date
+    var isEntryReminderSet: Bool
+    var entryOpeningTime: Date?
+    var startDate: Date
+    var endDate: Date
     var latitude: Double?
     var longitude: Double?
     var goals: String
@@ -38,10 +41,19 @@ final class Competition {
     
     @Relationship(deleteRule: .cascade) var schedule: [ScheduleItem] = []
     
-    init(id: UUID = UUID(), dateTime: Date, name: String, cost: String, arrowCount: UInt = 0, rounds: [CompetitionRound], goals: String, reflection: String, locationName: String, location: CLLocationCoordinate2D?) {
+    init(id: UUID = UUID(), isEntryReminderSet: Bool, entryOpeningTime: Date? = nil, startDate: Date, endDate: Date = Date(), multiDay: Bool, name: String, cost: String, arrowCount: UInt = 0, rounds: [CompetitionRound], goals: String, reflection: String, locationName: String, location: CLLocationCoordinate2D?) {
         self.id = id
         
-        self.dateTime = dateTime
+        self.isEntryReminderSet = isEntryReminderSet
+        self.entryOpeningTime = entryOpeningTime
+        self.startDate = startDate
+        
+        if multiDay {
+            self.endDate = endDate
+        } else {
+            self.endDate = startDate
+        }
+        
         self.latitude = location?.latitude
         self.longitude = location?.longitude
         self.goals = goals

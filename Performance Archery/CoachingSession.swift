@@ -15,7 +15,9 @@ final class CoachingSession {
     var coachName: String
     var arrowCount: UInt
     
-    var dateTime: Date
+    var startDate: Date
+    var endDate: Date
+    
     var latitude: Double?
     var longitude: Double?
     var goals: String
@@ -33,13 +35,14 @@ final class CoachingSession {
         }
     }
     
-    init(id: UUID = UUID(), dateTime: Date, arrowCount: UInt = 0, coachName: String, goals: String, reflection: String, locationName: String, location: CLLocationCoordinate2D?) {
+    init(id: UUID = UUID(), startDate: Date, arrowCount: UInt = 0, coachName: String, goals: String, reflection: String, locationName: String, location: CLLocationCoordinate2D?) {
         self.id = id
         
         self.arrowCount = arrowCount
         self.coachName = coachName
         
-        self.dateTime = dateTime
+        self.startDate = startDate
+        self.endDate = startDate
         self.locationName = locationName
         self.latitude = location?.latitude
         self.longitude = location?.longitude

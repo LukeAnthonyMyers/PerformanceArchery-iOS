@@ -17,7 +17,7 @@ struct TrainingLogView: View {
             List {
                 ForEach(trainingSessions) { session in
                     NavigationLink(value: session) {
-                        Text(session.dateTime, format: Date.FormatStyle(date: .long, time: .omitted))
+                        Text(session.startDate, format: Date.FormatStyle(date: .long, time: .omitted))
                         Text("Shots: " + String(session.arrowCount))
                     }
                 }
@@ -42,7 +42,7 @@ struct TrainingLogView: View {
     
     private func addItem() {
         let session = ShootingSession(
-            dateTime: Date(),
+            startDate: Date(),
             goals: "",
             reflection: "",
             locationName: "",

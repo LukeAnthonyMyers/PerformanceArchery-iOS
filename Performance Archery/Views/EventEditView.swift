@@ -12,7 +12,8 @@ import SwiftData
 import SwiftUI
 
 protocol Event {
-    var dateTime: Date { get set }
+    var startDate: Date { get set }
+    var endDate: Date { get set }
     var goals: String { get set }
     var reflection: String { get set }
     var locationName: String { get set }
@@ -29,6 +30,8 @@ struct EventEditView: View {
     @Environment(\.dismiss) private var dismiss
 
     var event: (any Event & AnyObject)?
+    
+    @StateObject private var viewModel = CompetitionViewModel()
     
     @State private var selectedDate: Date = Date()
     @State private var competitionName: String = ""
@@ -58,7 +61,7 @@ struct EventEditView: View {
         self.event = event
         
         if let event = event {
-            _selectedDate = State(initialValue: event.dateTime)
+            _selectedDate = State(initialValue: event.startDate)
             _address = State(initialValue: event.locationName)
             
             if let latitude = event.latitude, let longitude = event.longitude {
@@ -74,6 +77,8 @@ struct EventEditView: View {
             }
             
             if let competition = event as? Competition {
+                _viewModel = StateObject(wrappedValue: CompetitionViewModel(competition: competition))
+                
                 _selectedSessionType = State(initialValue: "Competition")
                 _competitionName = State(initialValue: competition.name)
                 _cost = State(initialValue: String(competition.cost))
@@ -103,132 +108,160 @@ struct EventEditView: View {
     @State private var address: String = ""
 
     var body: some View {
-        VStack {
-            Form {
-                Picker("Select an event type", selection: $selectedSessionType) {
-                    ForEach(sessionTypes, id: \.self) { sessionType in
-                        Text(sessionType)
+        Form {
+            Picker("Select an event type", selection: $selectedSessionType) {
+                ForEach(sessionTypes, id: \.self) { sessionType in
+                    Text(sessionType)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(event != nil)
+            
+            if selectedSessionType == "Training" {
+                Picker("Select a training type", selection: $selectedTrainingType) {
+                    ForEach(trainingTypes, id: \.self) { trainingType in
+                        Text(trainingType)
                     }
                 }
                 .pickerStyle(.segmented)
                 .disabled(event != nil)
+            }
+            
+            if selectedSessionType == "Competition" {
+                TextField("Competition name", text: $competitionName)
+                    .textFieldStyle(.roundedBorder)
+                    .textInputAutocapitalization(.words)
                 
-                if selectedSessionType == "Training" {
-                    Picker("Select a training type", selection: $selectedTrainingType) {
-                        ForEach(trainingTypes, id: \.self) { trainingType in
-                            Text(trainingType)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .disabled(event != nil)
-                }
-                
-                if selectedSessionType == "Competition" {
-                    TextField("Competition name", text: $competitionName)
-                        .textFieldStyle(.roundedBorder)
-                    
-                    HStack {
-                        Text(currencySymbol)
+                HStack {
+                    Text(currencySymbol)
 
-                        TextField("Cost", text: $cost)
-                            .keyboardType(.decimalPad)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    
-                    Picker("Round", selection: $selectedRound) {
-                        Section(header: Text("World Archery")) {
-                            ForEach(RoundType.worldArchery, id: \.self) { round in
-                                Text(round.name)
-                            }
-                        }
-                        
-                        Section(header: Text("Archery GB")) {
-                            ForEach(RoundType.archeryGB, id: \.self) { round in
-                                Text(round.name)
-                            }
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    
-                    TextField("Score", text: $score)
+                    TextField("Cost", text: $cost)
                         .keyboardType(.decimalPad)
                         .textFieldStyle(.roundedBorder)
-                } else if selectedSessionType == "Coaching" {
-                    TextField("Coach", text: $coachName)
-                        .textFieldStyle(.roundedBorder)
                 }
                 
-                DatePicker("Select Date", selection: $selectedDate, displayedComponents: .date)
-                
                 VStack {
-                    HStack {
-                        TextField("Location", text: $address, onCommit: {
-                            searchForLocation()
-                        })
-                        .textFieldStyle(.roundedBorder)
+                    Toggle("Set Entry Opening Time", isOn: $viewModel.entriesOpenEnabled)
+                    
+                    if viewModel.entriesOpenEnabled {
+                        DatePicker(
+                            "Entries Open",
+                            selection: Binding(
+                                get: { viewModel.entryOpeningTime ?? Date() },
+                                set: { viewModel.entryOpeningTime = $0 }
+                            )
+                        )
                         
-                        LocationButton(.currentLocation) {
-                            requestCurrentLocation()
+                        Toggle("Remind me when entries open", isOn: $viewModel.setReminder)
+                            .onChange(of: viewModel.setReminder) { _, newValue in
+                                if newValue {
+                                    NotificationService.requestPermission { granted in
+                                        if !granted {
+                                            viewModel.setReminder = false
+                                            print("User denied notification permission.")
+                                        }
+                                    }
+                                }
+                            }
+                    }
+                }
+                
+                Picker("Round", selection: $selectedRound) {
+                    Section(header: Text("World Archery")) {
+                        ForEach(RoundType.worldArchery, id: \.self) { round in
+                            Text(round.name)
                         }
-                        .labelStyle(.iconOnly)
-                        .cornerRadius(10)
                     }
                     
-                    MapReader { proxy in
-                        Map(position: $position) {
-                            if let coord = selectedCoordinate {
-                                Marker(address.components(separatedBy: ",").first ?? "", coordinate: coord).tint(.red)
-                            }
+                    Section(header: Text("Archery GB")) {
+                        ForEach(RoundType.archeryGB, id: \.self) { round in
+                            Text(round.name)
                         }
-                        .onTapGesture { position in
-                            if let coordinate = proxy.convert(position, from: .local) {
-                                selectedCoordinate = coordinate
-                            }
+                    }
+                }
+                .pickerStyle(.menu)
+                
+                TextField("Score", text: $score)
+                    .keyboardType(.decimalPad)
+                    .textFieldStyle(.roundedBorder)
+            } else if selectedSessionType == "Coaching" {
+                TextField("Coach", text: $coachName)
+                    .textFieldStyle(.roundedBorder)
+                    .textInputAutocapitalization(.words)
+                    .textContentType(.name)
+            }
+            
+            DatePicker("Date of \(selectedSessionType)", selection: $selectedDate, displayedComponents: .date)
+            
+            VStack {
+                HStack {
+                    TextField("Location", text: $address, onCommit: {
+                        searchForLocation()
+                    })
+                    .textFieldStyle(.roundedBorder)
+                    
+                    LocationButton(.currentLocation) {
+                        requestCurrentLocation()
+                    }
+                    .labelStyle(.iconOnly)
+                    .cornerRadius(10)
+                }
+                
+                MapReader { proxy in
+                    Map(position: $position) {
+                        if let coord = selectedCoordinate {
+                            Marker(address.components(separatedBy: ",").first ?? "", coordinate: coord).tint(.red)
                         }
-                        .frame(height: 250)
                     }
-                    .padding(5)
-                }
-                
-                VStack {
-                    Text("Goals")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    TextEditor(text: $goals)
-                        .frame(height: 100)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.gray, lineWidth: 1)
-                        )
-                }
-                
-                VStack {
-                    Text("Reflection")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    TextEditor(text: $reflection)
-                        .frame(height: 100)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.gray, lineWidth: 1)
-                        )
-                }
-                
-                if event == nil {
-                    Button(action: {
-                        createSession()
-                    }) {
-                        Text("Add \(selectedSessionType)\(selectedSessionType == "Competition" ? "" : " session")")
+                    .onTapGesture { position in
+                        if let coordinate = proxy.convert(position, from: .local) {
+                            selectedCoordinate = coordinate
+                        }
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                } else {
-                    Button(action: {
-                        updateSession()
-                    }) {
-                        Text("Update \(selectedSessionType)\(selectedSessionType == "Competition" ? "" : " session")")
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
+                    .frame(height: 250)
                 }
+                .padding(5)
+            }
+            
+            VStack {
+                Text("Goals")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                TextEditor(text: $goals)
+                    .frame(height: 100)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.gray, lineWidth: 1)
+                    )
+            }
+            
+            VStack {
+                Text("Reflection")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                TextEditor(text: $reflection)
+                    .frame(height: 100)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.gray, lineWidth: 1)
+                    )
+            }
+            
+            if event == nil {
+                Button(action: {
+                    createSession()
+                }) {
+                    Text("Add \(selectedSessionType)\(selectedSessionType == "Competition" ? "" : " session")")
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+            } else {
+                Button(action: {
+                    updateSession()
+                }) {
+                    Text("Update \(selectedSessionType)\(selectedSessionType == "Competition" ? "" : " session")")
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
             }
         }
+        .scrollDismissesKeyboard(.interactively)
     }
     
     private func searchForLocation() {
@@ -255,7 +288,7 @@ struct EventEditView: View {
     private func updateSession() {
         guard var existingEvent = event else { return }
 
-        existingEvent.dateTime = selectedDate
+        existingEvent.startDate = selectedDate
         existingEvent.goals = goals
         existingEvent.reflection = reflection
         existingEvent.locationName = address
@@ -267,8 +300,10 @@ struct EventEditView: View {
         if let competition = existingEvent as? Competition {
             competition.name = competitionName
             competition.cost = cost
+            competition.entryOpeningTime = viewModel.entryOpeningTime
             competition.rounds[0].roundType = selectedRound
             competition.rounds[0].score = score
+            viewModel.saveCompetition()
         } else if let coachingSession = existingEvent as? CoachingSession {
             coachingSession.coachName = coachName
         }
@@ -304,13 +339,16 @@ struct EventEditView: View {
         withAnimation {
             switch selectedSessionType {
                 case "Coaching":
-                    let newItem = CoachingSession(dateTime: selectedDate, coachName: coachName, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
+                    let newItem = CoachingSession(startDate: selectedDate, coachName: coachName, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)
                 case "Competition":
-                    let newItem = Competition(dateTime: selectedDate, name: competitionName, cost: cost, rounds: [CompetitionRound(roundType: selectedRound)], goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
+                let newItem = Competition(isEntryReminderSet: viewModel.setReminder, entryOpeningTime: viewModel.entryOpeningTime, startDate: selectedDate, multiDay: false, name: competitionName, cost: cost, rounds: [CompetitionRound(roundType: selectedRound)], goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)
+                
+                    viewModel.competition = newItem
+                    viewModel.saveCompetition()
                 default:
-                    let newItem = ShootingSession(dateTime: selectedDate, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
+                    let newItem = ShootingSession(startDate: selectedDate, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)
             }
         }

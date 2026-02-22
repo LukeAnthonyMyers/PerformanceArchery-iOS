@@ -16,21 +16,21 @@ struct AnyEvent: Identifiable {
 
     init(_ training: ShootingSession) {
         self.id = training.id
-        self.dateTime = training.dateTime
+        self.dateTime = training.startDate
         self.type = .training
         self.base = training
     }
 
     init(_ coaching: CoachingSession) {
         self.id = coaching.id
-        self.dateTime = coaching.dateTime
+        self.dateTime = coaching.startDate
         self.type = .coaching
         self.base = coaching
     }
 
     init(_ competition: Competition) {
         self.id = competition.id
-        self.dateTime = competition.dateTime
+        self.dateTime = competition.startDate
         self.type = .competitions
         self.base = competition
     }

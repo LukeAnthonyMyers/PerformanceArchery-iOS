@@ -268,7 +268,7 @@ struct ShootingSessionView: View {
             }
             .padding()
         }
-        .navigationTitle("\(session.dateTime, format: Date.FormatStyle(date: .complete, time: .omitted))")
+        .navigationTitle("\(session.startDate, format: Date.FormatStyle(date: .complete, time: .omitted))")
         .navigationBarTitleDisplayMode(.inline)
     }
     
@@ -285,7 +285,7 @@ struct ShootingSessionView: View {
                     )
                     session.CompetitionRounds.append(newItem)
                 default:
-                    let newItem = ShootingSession(dateTime: selectedDate, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
+                    let newItem = ShootingSession(startDate: selectedDate, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)
             }
             try? modelContext.save()
@@ -296,7 +296,7 @@ struct ShootingSessionView: View {
 
 #Preview {
     let dummy = ShootingSession(
-        dateTime: Date(),
+        startDate: Date(),
         goals: "Improve consistency",
         reflection: "Shot well",
         locationName: "Home",

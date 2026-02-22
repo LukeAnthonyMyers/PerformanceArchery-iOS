@@ -26,7 +26,7 @@ struct CompetitionView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
             
-            Text("\(competition.dateTime.formatted(date: .complete, time: .omitted)) at \(competition.locationName)")
+            Text("\(competition.startDate.formatted(date: .complete, time: .omitted)) at \(competition.locationName)")
             Spacer()
             Divider()
 
@@ -111,8 +111,28 @@ struct ScheduleRowView: View {
 }
 
 #Preview {
+    let startDate: Date = {
+        var comps = DateComponents()
+        comps.year = 2026
+        comps.month = 3
+        comps.day = 26
+        return Calendar.current.date(from: comps) ?? Date()
+    }()
+    
+    let endDate: Date = {
+        var comps = DateComponents()
+        comps.year = 2026
+        comps.month = 3
+        comps.day = 29
+        return Calendar.current.date(from: comps) ?? Date()
+    }()
+    
     let dummy = Competition(
-        dateTime: Date(),
+        isEntryReminderSet: false,
+        entryOpeningTime: Date(),
+        startDate: startDate,
+        endDate: endDate,
+        multiDay: true,
         name: "The Vegas Shoot",
         cost: "200",
         rounds: [CompetitionRound(roundType: RoundType.archeryGB[3])],

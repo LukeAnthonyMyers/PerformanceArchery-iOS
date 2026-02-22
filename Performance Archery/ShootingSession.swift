@@ -12,7 +12,8 @@ import SwiftData
 final class ShootingSession: Hashable {
     @Attribute(.unique) var id: UUID
     
-    var dateTime: Date
+    var startDate: Date
+    var endDate: Date
     var latitude: Double?
     var longitude: Double?
     var goals: String
@@ -39,11 +40,12 @@ final class ShootingSession: Hashable {
         }
     }
     
-    init(id: UUID = UUID(), dateTime: Date, goals: String, reflection: String, locationName: String, location: CLLocationCoordinate2D?) {
+    init(id: UUID = UUID(), startDate: Date, goals: String, reflection: String, locationName: String, location: CLLocationCoordinate2D?) {
         self.id = id
         
         self.locationName = locationName
-        self.dateTime = dateTime
+        self.startDate = startDate
+        self.endDate = startDate
         self.latitude = location?.latitude
         self.longitude = location?.longitude
         self.goals = goals

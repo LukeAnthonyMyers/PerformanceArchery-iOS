@@ -8,24 +8,44 @@
 import SwiftData
 import SwiftUI
 
-@Observable
-class CompetitionViewModel {
-    var competition: Competition
+class CompetitionViewModel: ObservableObject {
+    @Published var competitionName: String = ""
+    @Published var entryOpeningTime: Date? = nil
+    @Published var setReminder: Bool = false
+    @Published var entriesOpenEnabled: Bool = false {
+        didSet {
+            if !entriesOpenEnabled {
+                entryOpeningTime = nil
+                setReminder = false
+            }
+        }
+    }
+    
+    var competition: Competition?
 
-    init(competition: Competition) {
+    init(competition: Competition? = nil) {
         self.competition = competition
+        
+        if let competition = competition {
+            self.competitionName = competition.name
+            self.entryOpeningTime = competition.entryOpeningTime
+            self.entriesOpenEnabled = competition.entryOpeningTime != nil
+            self.setReminder = competition.isEntryReminderSet
+        }
     }
 
     var displayedSchedule: [ScheduleItem] {
-        competition.schedule.sorted { $0.index < $1.index }
+        competition?.schedule.sorted { $0.index < $1.index } ?? []
     }
 
     func addScheduleItem() {
+        guard let competition = competition else { return }
         let newItem = ScheduleItem(title: "", index: competition.schedule.count)
         competition.schedule.append(newItem)
     }
 
     func deleteItems(at offsets: IndexSet) {
+        guard let competition = competition else { return }
         let displayed = displayedSchedule
         let itemsToDelete = offsets.map { displayed[$0] }
         for item in itemsToDelete {
@@ -37,6 +57,7 @@ class CompetitionViewModel {
     }
 
     func moveItems(from source: IndexSet, to destination: Int) {
+        guard let competition = competition else { return }
         var ids = displayedSchedule.map(\.persistentModelID)
         ids.move(fromOffsets: source, toOffset: destination)
         for (i, id) in ids.enumerated() {
@@ -49,6 +70,23 @@ class CompetitionViewModel {
     private func reindexFromDisplayedOrder() {
         for (i, item) in displayedSchedule.enumerated() {
             item.index = i
+        }
+    }
+    
+    func saveCompetition() {
+        guard let competition = competition else { return }
+        
+        competition.isEntryReminderSet = setReminder
+        
+        if entriesOpenEnabled && setReminder {
+            guard let entryOpeningTime = competition.entryOpeningTime else { return }
+                    
+            NotificationService.scheduleReminder(
+                for: entryOpeningTime,
+                competition: competition
+            )
+        } else {
+            NotificationService.cancelReminder(for: competition)
         }
     }
 }
