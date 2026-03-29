@@ -40,7 +40,8 @@ class CompetitionViewModel: ObservableObject {
 
     func addScheduleItem(for date: Date) {
         guard let competition = competition else { return }
-        let newItem = ScheduleItem(title: "", dateTime: date, index: competition.schedule.count)
+        let maxIndex = competition.schedule.map { $0.index }.max() ?? 0
+        let newItem = ScheduleItem(title: "", dateTime: date, index: maxIndex + 1)
         competition.schedule.append(newItem)
     }
 
@@ -72,16 +73,16 @@ class CompetitionViewModel: ObservableObject {
         case round(CompetitionRound)
         
         var id: ObjectIdentifier {
-                switch self {
+            switch self {
                 case .schedule(let item): return ObjectIdentifier(item)
                 case .round(let round): return ObjectIdentifier(round)
-                }
             }
+        }
         
-        var index: Int {
+        var sortOrder: Int {
             switch self {
-            case .schedule(let item): return item.index
-            case .round(let round): return round.index
+                case .schedule(let item): return item.index
+                case .round(let round): return round.sortIndex
             }
         }
     }
@@ -98,7 +99,13 @@ class CompetitionViewModel: ObservableObject {
             return round.index == index
         }.map { DayRowItem.round($0) } ?? []
         
-        return (dayItems + dayRounds).sorted { $0.index < $1.index }
+        return (dayItems + dayRounds).sorted { item1, item2 in
+            if item1.sortOrder == item2.sortOrder {
+                if case .round = item1 { return true }
+                if case .round = item2 { return false }
+            }
+            return item1.sortOrder < item2.sortOrder
+        }
     }
 
     func moveItems(in dayIndex: Int, date: Date, from source: IndexSet, to destination: Int) {
@@ -108,7 +115,7 @@ class CompetitionViewModel: ObservableObject {
         for (newIndex, item) in items.enumerated() {
             switch item {
             case .schedule(let s): s.index = newIndex
-            case .round(let r): r.index = newIndex
+            case .round(let r): r.sortIndex = newIndex
             }
         }
         

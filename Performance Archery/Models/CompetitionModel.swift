@@ -86,6 +86,7 @@ final class ScheduleItem {
 final class CompetitionRound {
     @Attribute(.unique) var id: UUID
     @Attribute var index: Int
+    var sortIndex: Int = 0
     
     var roundType: RoundType
     var arrowCount: UInt8
