@@ -14,7 +14,7 @@ final class Competition {
     @Attribute(.unique) var id: UUID
     
     var name: String
-    var rounds: [CompetitionRound]
+    @Relationship(deleteRule: .cascade) var rounds: [CompetitionRound] = []
     var cost: String
     var arrowCount: UInt
     
@@ -85,6 +85,7 @@ final class ScheduleItem {
 @Model
 final class CompetitionRound {
     @Attribute(.unique) var id: UUID
+    @Attribute var index: Int
     
     var roundType: RoundType
     var arrowCount: UInt8
@@ -93,8 +94,9 @@ final class CompetitionRound {
     var score: String
     var targetAssignment: String
 
-    init(id: UUID = UUID(), roundType: RoundType, startTime: Date? = nil, arrowCount: UInt8 = 0, comeDowns: UInt8 = 0, score: String = "", targetAssignment: String = "") {
+    init(id: UUID = UUID(), index: Int = 0, roundType: RoundType, startTime: Date? = nil, arrowCount: UInt8 = 0, comeDowns: UInt8 = 0, score: String = "", targetAssignment: String = "") {
         self.id = id
+        self.index = index
         self.roundType = roundType
         self.arrowCount = arrowCount
         self.comeDowns = comeDowns

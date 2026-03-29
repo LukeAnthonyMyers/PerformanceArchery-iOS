@@ -13,11 +13,19 @@ struct CompetitionView: View {
     @Environment(\.modelContext) private var modelContext
     
     @State private var isShowingSettings = false
-    @State private var viewModel: CompetitionViewModel
+    @StateObject private var viewModel: CompetitionViewModel
     
     init(competition: Competition) {
         self.competition = competition
-        _viewModel = State(initialValue: CompetitionViewModel(competition: competition))
+        _viewModel = StateObject(wrappedValue: CompetitionViewModel(competition: competition))
+    }
+    
+    private var competitionDays: Int {
+        if Calendar.current.isDate(competition.startDate, inSameDayAs: competition.endDate) { return 1 }
+        let start = Calendar.current.startOfDay(for: competition.startDate)
+        let end = Calendar.current.startOfDay(for: competition.endDate)
+        let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0
+        return max(1, days + 1)
     }
     
     var body: some View {
@@ -26,18 +34,58 @@ struct CompetitionView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
             
-            Text("\(competition.startDate.formatted(date: .complete, time: .omitted)) at \(competition.locationName)")
+            if Calendar.current.isDate(competition.startDate, inSameDayAs: competition.endDate) {
+                Text("\(competition.startDate.formatted(date: .complete, time: .omitted))" + (competition.locationName.isEmpty ? "" : " at \(competition.locationName)"))
+            } else {
+                Text("\(competition.startDate.formatted(date: .complete, time: .omitted)) to \(competition.endDate.formatted(date: .complete, time: .omitted))" + (competition.locationName.isEmpty ? "" : " at \(competition.locationName)"))
+            }
             Spacer()
             Divider()
 
             List {
-                ForEach(viewModel.displayedSchedule, id: \.persistentModelID) { item in
-                    ScheduleRowView(item: item, competition: competition, isRound: false)
+                ForEach(0..<competitionDays, id: \.self) { dayIndex in
+                    let dayDate = Calendar.current.date(byAdding: .day, value: dayIndex, to: competition.startDate) ?? competition.startDate
+                    
+                    Section {
+                        let combinedItems = viewModel.itemsForDay(index: dayIndex, date: dayDate)
+                        
+                        ForEach(combinedItems) { rowItem in
+                            switch rowItem {
+                            case .schedule(let item):
+                                ScheduleRowView(item: item)
+                            case .round(let round):
+                                RoundRowView(round: round)
+                            }
+                        }
+                        .onMove { source, destination in
+                            viewModel.moveItems(in: dayIndex, date: dayDate, from: source, to: destination)
+                        }
+                        .onDelete { offsets in
+                            let itemsAtOffsets = offsets.map { combinedItems[$0] }
+                            
+                            let scheduleItemsToDelete = itemsAtOffsets.compactMap { item -> ScheduleItem? in
+                                if case .schedule(let s) = item { return s }
+                                return nil
+                            }
+                            
+                            viewModel.deleteSpecificItems(scheduleItemsToDelete)
+                        }
+                    } header: {
+                        if !Calendar.current.isDate(competition.startDate, inSameDayAs: competition.endDate) {
+                            HStack {
+                                Text("Day \(dayIndex + 1) - \(dayDate.formatted(date: .abbreviated, time: .omitted))")
+                                    .font(.headline)
+                                
+                                Spacer()
+                                
+                                Button(action: { viewModel.addScheduleItem(for: dayDate) }) {
+                                    Image(systemName: "plus")
+                                        .font(.title3)
+                                }
+                            }
+                        }
+                    }
                 }
-                .onDelete(perform: viewModel.deleteItems)
-                .onMove(perform: viewModel.moveItems)
-
-                ScheduleRowView(item: ScheduleItem(title: competition.rounds[0].roundType.name, index: 0), competition: competition, isRound: true)
             }
             .listStyle(.plain)
             .scrollDismissesKeyboard(.interactively)
@@ -47,9 +95,11 @@ struct CompetitionView: View {
                         Image(systemName: "gear")
                     }
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: { viewModel.addScheduleItem() }) {
-                        Image(systemName: "plus")
+                if Calendar.current.isDate(competition.startDate, inSameDayAs: competition.endDate) {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: { viewModel.addScheduleItem(for: competition.startDate) }) {
+                            Image(systemName: "plus")
+                        }
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -62,49 +112,65 @@ struct CompetitionView: View {
             EventEditView(event: competition)
         }
     }
+    
+    private func deleteDailyItems(at offsets: IndexSet, from dailyItems: [ScheduleItem]) {
+        let itemsToDelete = offsets.map { dailyItems[$0] }
+        for item in itemsToDelete {
+            if let idx = competition.schedule.firstIndex(where: { $0.persistentModelID == item.persistentModelID }) {
+                competition.schedule.remove(at: idx)
+            }
+        }
+    }
 }
 
 struct ScheduleRowView: View {
     @Bindable var item: ScheduleItem
-    @Bindable var competition: Competition
-    let isRound: Bool
 
     var body: some View {
         HStack(spacing: 15) {
             Rectangle()
-                .fill(isRound ? .red.opacity(0.3) : .blue.opacity(0.3))
+                .fill(.blue.opacity(0.3))
                 .frame(width: 2)
             
-            if isRound {
-                HStack {
-                    Text(item.title)
-                        .font(.headline)
-                    
-                    Spacer()
-                    
-                    Text("Target assignment:")
-                        .font(.subheadline)
-                    
-                    TextField("...", text: $competition.rounds[0].targetAssignment)
-                        .font(.subheadline)
-                        .frame(width: 30)
-                }
-            } else {
-                TextField("...", text: $item.title, axis: .vertical)
-                    .font(.body)
-                
-                Spacer()
-                
-                DatePicker(
-                    "Select Time",
-                    selection: Binding<Date>(
-                        get: { item.dateTime ?? Date() },
-                        set: { item.dateTime = $0 }
-                    ),
-                    displayedComponents: .hourAndMinute
-                )
-                .labelsHidden()
-            }
+            TextField("...", text: $item.title, axis: .vertical)
+                .font(.body)
+            
+            Spacer()
+            
+            DatePicker(
+                "Select Time",
+                selection: Binding<Date>(
+                    get: { item.dateTime ?? Date() },
+                    set: { item.dateTime = $0 }
+                ),
+                displayedComponents: .hourAndMinute
+            )
+            .labelsHidden()
+        }
+        .listRowSeparator(.hidden)
+    }
+}
+
+struct RoundRowView: View {
+    @Bindable var round: CompetitionRound
+
+    var body: some View {
+        HStack(spacing: 15) {
+            Rectangle()
+                .fill(.red.opacity(0.3))
+                .frame(width: 2)
+            
+            Text(round.roundType.name)
+                .font(.headline)
+            
+            Spacer()
+            
+            Text("Target assignment:")
+                .font(.subheadline)
+            
+            TextField("...", text: $round.targetAssignment)
+                .font(.subheadline)
+                .frame(width: 30)
         }
         .listRowSeparator(.hidden)
     }
@@ -115,7 +181,7 @@ struct ScheduleRowView: View {
         var comps = DateComponents()
         comps.year = 2026
         comps.month = 3
-        comps.day = 26
+        comps.day = 27
         return Calendar.current.date(from: comps) ?? Date()
     }()
     
@@ -129,13 +195,12 @@ struct ScheduleRowView: View {
     
     let dummy = Competition(
         isEntryReminderSet: false,
-        entryOpeningTime: Date(),
         startDate: startDate,
         endDate: endDate,
         multiDay: true,
         name: "The Vegas Shoot",
         cost: "200",
-        rounds: [CompetitionRound(roundType: RoundType.archeryGB[3])],
+        rounds: Array(repeating: CompetitionRound(roundType: RoundType.archeryGB[3]), count: 3),
         goals: "Improve consistency",
         reflection: "Shot well",
         locationName: "Las Vegas, Nevada",
@@ -147,4 +212,3 @@ struct ScheduleRowView: View {
     }
     .modelContainer(for: Competition.self, inMemory: true)
 }
-

@@ -38,33 +38,10 @@ class CompetitionViewModel: ObservableObject {
         competition?.schedule.sorted { $0.index < $1.index } ?? []
     }
 
-    func addScheduleItem() {
+    func addScheduleItem(for date: Date) {
         guard let competition = competition else { return }
-        let newItem = ScheduleItem(title: "", index: competition.schedule.count)
+        let newItem = ScheduleItem(title: "", dateTime: date, index: competition.schedule.count)
         competition.schedule.append(newItem)
-    }
-
-    func deleteItems(at offsets: IndexSet) {
-        guard let competition = competition else { return }
-        let displayed = displayedSchedule
-        let itemsToDelete = offsets.map { displayed[$0] }
-        for item in itemsToDelete {
-            if let idx = competition.schedule.firstIndex(where: { $0.persistentModelID == item.persistentModelID }) {
-                competition.schedule.remove(at: idx)
-            }
-        }
-        reindexFromDisplayedOrder()
-    }
-
-    func moveItems(from source: IndexSet, to destination: Int) {
-        guard let competition = competition else { return }
-        var ids = displayedSchedule.map(\.persistentModelID)
-        ids.move(fromOffsets: source, toOffset: destination)
-        for (i, id) in ids.enumerated() {
-            if let item = competition.schedule.first(where: { $0.persistentModelID == id }) {
-                item.index = i
-            }
-        }
     }
 
     private func reindexFromDisplayedOrder() {
@@ -88,5 +65,71 @@ class CompetitionViewModel: ObservableObject {
         } else {
             NotificationService.cancelReminder(for: competition)
         }
+    }
+    
+    enum DayRowItem: Identifiable, Hashable {
+        case schedule(ScheduleItem)
+        case round(CompetitionRound)
+        
+        var id: ObjectIdentifier {
+                switch self {
+                case .schedule(let item): return ObjectIdentifier(item)
+                case .round(let round): return ObjectIdentifier(round)
+                }
+            }
+        
+        var index: Int {
+            switch self {
+            case .schedule(let item): return item.index
+            case .round(let round): return round.index
+            }
+        }
+    }
+    
+    func itemsForDay(index: Int, date: Date) -> [DayRowItem] {
+        let dayItems = competition?.schedule.filter {
+            Calendar.current.isDate($0.dateTime ?? date, inSameDayAs: date)
+        }.map { DayRowItem.schedule($0) } ?? []
+        
+        let dayRounds = competition?.rounds.filter { round in
+            if let roundDate = round.startTime {
+                return Calendar.current.isDate(roundDate, inSameDayAs: date)
+            }
+            return round.index == index
+        }.map { DayRowItem.round($0) } ?? []
+        
+        return (dayItems + dayRounds).sorted { $0.index < $1.index }
+    }
+
+    func moveItems(in dayIndex: Int, date: Date, from source: IndexSet, to destination: Int) {
+        var items = itemsForDay(index: dayIndex, date: date)
+        items.move(fromOffsets: source, toOffset: destination)
+        
+        for (newIndex, item) in items.enumerated() {
+            switch item {
+            case .schedule(let s): s.index = newIndex
+            case .round(let r): r.index = newIndex
+            }
+        }
+        
+        self.objectWillChange.send()
+    }
+    
+    func deleteSpecificItems(_ items: [ScheduleItem]) {
+        guard let competition = competition else { return }
+        
+        for item in items {
+            if let idx = competition.schedule.firstIndex(where: { $0.persistentModelID == item.persistentModelID }) {
+                competition.schedule.remove(at: idx)
+            }
+        }
+        
+        reindexFromDisplayedOrder()
+    }
+}
+
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        return indices.contains(index) ? self[index] : nil
     }
 }

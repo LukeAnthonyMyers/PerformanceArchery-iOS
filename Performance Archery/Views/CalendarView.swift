@@ -10,27 +10,31 @@ import SwiftUI
 
 struct AnyEvent: Identifiable {
     let id: UUID
-    let dateTime: Date
+    let startDate: Date
+    let endDate: Date
     let type: CalendarView.EventType
     let base: Any
 
     init(_ training: ShootingSession) {
         self.id = training.id
-        self.dateTime = training.startDate
+        self.startDate = training.startDate
+        self.endDate = training.endDate
         self.type = .training
         self.base = training
     }
 
     init(_ coaching: CoachingSession) {
         self.id = coaching.id
-        self.dateTime = coaching.startDate
+        self.startDate = coaching.startDate
+        self.endDate = coaching.endDate
         self.type = .coaching
         self.base = coaching
     }
 
     init(_ competition: Competition) {
         self.id = competition.id
-        self.dateTime = competition.startDate
+        self.startDate = competition.startDate
+        self.endDate = competition.endDate
         self.type = .competitions
         self.base = competition
     }
@@ -79,18 +83,18 @@ struct CalendarView: View {
         
         return allEvents
             .filter { isEventTypeVisible($0.type) }
-            .sorted { $0.dateTime < $1.dateTime }
+            .sorted { $0.startDate < $1.startDate }
     }
     
     var eventsByMonth: [(key: Date, value: [AnyEvent])] {
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: combinedEvents) { event in
-            calendar.date(from: calendar.dateComponents([.year, .month], from: event.dateTime))!
+            calendar.date(from: calendar.dateComponents([.year, .month], from: event.startDate))!
         }
         let sorted = grouped.sorted { $0.key < $1.key }
 
         return sorted.map { (key, events) in
-            (key, events.sorted { $0.dateTime < $1.dateTime })
+            (key, events.sorted { $0.startDate < $1.startDate })
         }
     }
 
@@ -143,7 +147,7 @@ struct CalendarView: View {
             NavigationSplitView {
                 List {
                     ForEach(eventsByMonth, id: \.key) { month, events in
-                        Section(header: Text(month.formatted(.dateTime.year().month()))) {
+                        Section(header: Text(month.formatted(.dateTime.year().month(.wide)))) {
                             ForEach(events) { event in
                                 NavigationLink {
                                     if let training = event.base as? ShootingSession {
@@ -160,7 +164,7 @@ struct CalendarView: View {
                                                 Circle()
                                                     .fill(event.type.colour)
                                                     .frame(width: 10, height: 10)
-                                                Text(ordinalDay(from: event.dateTime))
+                                                Text(ordinalDay(from: event.startDate))
                                                     .font(.headline)
                                                 if let session = event.base as? CoachingSession {
                                                     Text("Coaching with \(session.coachName)")
@@ -175,8 +179,14 @@ struct CalendarView: View {
                                                 Circle()
                                                     .fill(event.type.colour)
                                                     .frame(width: 10, height: 10)
-                                                Text(ordinalDay(from: event.dateTime))
-                                                    .font(.headline)
+                                                if event.startDate != event.endDate {
+                                                    Text("\(ordinalDay(from: event.startDate)) - \(ordinalDay(from: event.endDate))")
+                                                        .font(.headline)
+                                                } else {
+                                                    Text(ordinalDay(from: event.startDate))
+                                                        .font(.headline)
+                                                }
+                                                    
                                                 if let competition = event.base as? Competition {
                                                     Text(competition.name)
                                                 }
@@ -190,7 +200,7 @@ struct CalendarView: View {
                                                 Circle()
                                                     .fill(event.type.colour)
                                                     .frame(width: 10, height: 10)
-                                                Text(ordinalDay(from: event.dateTime))
+                                                Text(ordinalDay(from: event.startDate))
                                                     .font(.headline)
                                                 Spacer()
                                                 Text(event.type.displayName)

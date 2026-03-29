@@ -43,6 +43,7 @@ struct TrainingLogView: View {
     private func addItem() {
         let session = ShootingSession(
             startDate: Date(),
+            multiDay: false,
             goals: "",
             reflection: "",
             locationName: "",

@@ -33,11 +33,13 @@ struct EventEditView: View {
     
     @StateObject private var viewModel = CompetitionViewModel()
     
-    @State private var selectedDate: Date = Date()
+    @State private var selectedStartDate: Date = Date()
+    @State private var selectedEndDate: Date = Date()
+    @State private var isMultiDay: Bool = false
     @State private var competitionName: String = ""
     @State private var coachName: String = ""
     @State private var cost: String = ""
-    @State private var score: String = ""
+    @State private var scores: [String] = [""]
     @State private var goals: String = ""
     @State private var reflection: String = ""
     @State private var region = MKCoordinateRegion(
@@ -55,13 +57,24 @@ struct EventEditView: View {
     let trainingTypes = ["Shooting", "SPT", "S&C"]
     @State private var selectedTrainingType = "Shooting"
     
-    @State private var selectedRound = RoundType.allRounds[0]
+    @State private var selectedRounds: [RoundType] = [RoundType.allRounds[0]]
+    @State private var roundDayIndices: [Int] = [0]
+    
+    private var competitionDays: Int {
+        if !isMultiDay { return 1 }
+        let start = Calendar.current.startOfDay(for: selectedStartDate)
+        let end = Calendar.current.startOfDay(for: selectedEndDate)
+        let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0
+        return max(1, days + 1)
+    }
     
     init(event: (any Event & AnyObject)? = nil) {
         self.event = event
         
         if let event = event {
-            _selectedDate = State(initialValue: event.startDate)
+            _selectedStartDate = State(initialValue: event.startDate)
+            _selectedEndDate = State(initialValue: event.endDate)
+            _isMultiDay = State(initialValue: !Calendar.current.isDate(event.startDate, inSameDayAs: event.endDate))
             _address = State(initialValue: event.locationName)
             
             if let latitude = event.latitude, let longitude = event.longitude {
@@ -82,8 +95,9 @@ struct EventEditView: View {
                 _selectedSessionType = State(initialValue: "Competition")
                 _competitionName = State(initialValue: competition.name)
                 _cost = State(initialValue: String(competition.cost))
-                _selectedRound = State(initialValue: competition.rounds[0].roundType)
-                _score = State(initialValue: String(competition.rounds[0].score))
+                _selectedRounds = State(initialValue: competition.rounds.isEmpty ? [RoundType.allRounds[0]] : competition.rounds.map { $0.roundType })
+                _roundDayIndices = State(initialValue: competition.rounds.isEmpty ? [0] : competition.rounds.map { $0.index })
+                _scores = State(initialValue: competition.rounds.isEmpty ? [""] : competition.rounds.map { String($0.score) })
                 _goals = State(initialValue: competition.goals)
                 _reflection = State(initialValue: competition.reflection)
             } else if let coachingSession = event as? CoachingSession {
@@ -96,8 +110,6 @@ struct EventEditView: View {
                 _goals = State(initialValue: trainingSession.goals)
                 _reflection = State(initialValue: trainingSession.reflection)
             }
-        } else {
-            _selectedSessionType = State(initialValue: "Training")
         }
     }
 
@@ -166,24 +178,67 @@ struct EventEditView: View {
                     }
                 }
                 
-                Picker("Round", selection: $selectedRound) {
-                    Section(header: Text("World Archery")) {
-                        ForEach(RoundType.worldArchery, id: \.self) { round in
-                            Text(round.name)
+                VStack {
+                    ForEach(0..<selectedRounds.count, id: \.self) { index in
+                        VStack {
+                            Picker("Round", selection: $selectedRounds[index]) {
+                                Section(header: Text("World Archery")) {
+                                    ForEach(RoundType.worldArchery, id: \.self) { round in
+                                        Text(round.name).tag(round)
+                                    }
+                                }
+                                Section(header: Text("Archery GB")) {
+                                    ForEach(RoundType.archeryGB, id: \.self) { round in
+                                        Text(round.name).tag(round)
+                                    }
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            
+                            if isMultiDay {
+                                Picker("Day", selection: $roundDayIndices[index]) {
+                                    ForEach(0..<competitionDays, id: \.self) { day in
+                                        if let date = Calendar.current.date(byAdding: .day, value: day, to: selectedStartDate) {
+                                            Text(date.formatted(.dateTime.weekday(.wide)))
+                                                .tag(day)
+                                        }
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                            }
                         }
+                        
+                        Divider()
+                            .frame(height: 10)
                     }
                     
-                    Section(header: Text("Archery GB")) {
-                        ForEach(RoundType.archeryGB, id: \.self) { round in
-                            Text(round.name)
+                    HStack {
+                        if selectedRounds.count > 1 {
+                            Button("Remove Round") {
+                                selectedRounds.removeLast()
+                                scores.removeLast()
+                                roundDayIndices.removeLast()
+                            }
+                            
+                            Divider()
+                        }
+                        
+                        Button("Add Another Round") {
+                            selectedRounds.append(RoundType.allRounds[0])
+                            scores.append("")
+                            roundDayIndices.append(0)
                         }
                     }
+                    .buttonStyle(.borderless)
                 }
-                .pickerStyle(.menu)
                 
-                TextField("Score", text: $score)
-                    .keyboardType(.decimalPad)
-                    .textFieldStyle(.roundedBorder)
+                VStack {
+                    ForEach(selectedRounds.indices, id: \.self) { index in
+                        TextField(selectedRounds.count > 1 ? "Score - Round \(index + 1)" : "Score", text: $scores[index])
+                            .keyboardType(.decimalPad)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
             } else if selectedSessionType == "Coaching" {
                 TextField("Coach", text: $coachName)
                     .textFieldStyle(.roundedBorder)
@@ -191,7 +246,22 @@ struct EventEditView: View {
                     .textContentType(.name)
             }
             
-            DatePicker("Date of \(selectedSessionType)", selection: $selectedDate, displayedComponents: .date)
+            VStack {
+                Toggle("Multiple Days", isOn: $isMultiDay)
+                if isMultiDay {
+                    DatePicker("\(selectedSessionType) Start Date", selection: $selectedStartDate, displayedComponents: .date)
+                    if let earliestEndDate = Calendar.current.date(byAdding: .day, value: 1, to: selectedStartDate) {
+                        DatePicker(
+                            "\(selectedSessionType) End Date",
+                            selection: $selectedEndDate,
+                            in: earliestEndDate...,
+                            displayedComponents: .date
+                        )
+                    }
+                } else {
+                    DatePicker("Date of \(selectedSessionType)", selection: $selectedStartDate, displayedComponents: .date)
+                }
+            }
             
             VStack {
                 HStack {
@@ -262,6 +332,14 @@ struct EventEditView: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
+        .onChange(of: selectedStartDate) { _, newDate in
+            if selectedEndDate < newDate { selectedEndDate = newDate }
+        }
+        .onChange(of: isMultiDay) {
+            if isMultiDay {
+                selectedEndDate = Calendar.current.date(byAdding: .day, value: 1, to: selectedStartDate) ?? selectedStartDate
+            }
+        }
     }
     
     private func searchForLocation() {
@@ -288,10 +366,12 @@ struct EventEditView: View {
     private func updateSession() {
         guard var existingEvent = event else { return }
 
-        existingEvent.startDate = selectedDate
+        existingEvent.startDate = selectedStartDate
+        existingEvent.endDate = isMultiDay ? selectedEndDate : selectedStartDate
         existingEvent.goals = goals
         existingEvent.reflection = reflection
         existingEvent.locationName = address
+        
         if let coord = selectedCoordinate {
             existingEvent.latitude = coord.latitude
             existingEvent.longitude = coord.longitude
@@ -301,8 +381,31 @@ struct EventEditView: View {
             competition.name = competitionName
             competition.cost = cost
             competition.entryOpeningTime = viewModel.entryOpeningTime
-            competition.rounds[0].roundType = selectedRound
-            competition.rounds[0].score = score
+
+            let targetCount = selectedRounds.count
+            
+            while competition.rounds.count > targetCount {
+                if let roundToRemove = competition.rounds.last {
+                    modelContext.delete(roundToRemove)
+                    competition.rounds.removeLast()
+                }
+            }
+            
+            if competition.rounds.count < targetCount {
+                for i in competition.rounds.count..<targetCount {
+                    competition.rounds.append(CompetitionRound(roundType: selectedRounds[i]))
+                }
+            }
+
+            for i in 0..<targetCount {
+                let round = competition.rounds[i]
+                round.index = roundDayIndices[i]
+                round.roundType = selectedRounds[i]
+                if i < scores.count {
+                    round.score = scores[i]
+                }
+            }
+
             viewModel.saveCompetition()
         } else if let coachingSession = existingEvent as? CoachingSession {
             coachingSession.coachName = coachName
@@ -339,18 +442,24 @@ struct EventEditView: View {
         withAnimation {
             switch selectedSessionType {
                 case "Coaching":
-                    let newItem = CoachingSession(startDate: selectedDate, coachName: coachName, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
+                    let newItem = CoachingSession(startDate: selectedStartDate, endDate: selectedEndDate, multiDay: isMultiDay, coachName: coachName, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)
                 case "Competition":
-                let newItem = Competition(isEntryReminderSet: viewModel.setReminder, entryOpeningTime: viewModel.entryOpeningTime, startDate: selectedDate, multiDay: false, name: competitionName, cost: cost, rounds: [CompetitionRound(roundType: selectedRound)], goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
-                    modelContext.insert(newItem)
-                
-                    viewModel.competition = newItem
-                    viewModel.saveCompetition()
+                    var newRounds: [CompetitionRound] = []
+                    for i in 0..<selectedRounds.count {
+                        let r = CompetitionRound(index: roundDayIndices[i], roundType: selectedRounds[i], score: i < scores.count ? scores[i] : "")
+                        newRounds.append(r)
+                    }
+                    let newItem = Competition(isEntryReminderSet: viewModel.setReminder, entryOpeningTime: viewModel.entryOpeningTime, startDate: selectedStartDate, endDate: selectedEndDate, multiDay: isMultiDay, name: competitionName, cost: cost, rounds: newRounds, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
+                        modelContext.insert(newItem)
+                    
+                        viewModel.competition = newItem
+                        viewModel.saveCompetition()
                 default:
-                    let newItem = ShootingSession(startDate: selectedDate, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
+                    let newItem = ShootingSession(startDate: selectedStartDate, endDate: selectedEndDate, multiDay: isMultiDay, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)
             }
+            try? modelContext.save()
         }
         dismiss()
     }
@@ -360,3 +469,4 @@ struct EventEditView: View {
     EventEditView()
         .modelContainer(for: [ShootingSession.self, CoachingSession.self, Competition.self], inMemory: true)
 }
+
