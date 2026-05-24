@@ -44,8 +44,7 @@ struct TrainingLogView: View {
         let session = ShootingSession(
             startDate: Date(),
             multiDay: false,
-            goals: "",
-            reflection: "",
+            notes: "",
             locationName: "",
             location: nil
         )

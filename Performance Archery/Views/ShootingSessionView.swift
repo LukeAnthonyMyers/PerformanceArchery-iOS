@@ -25,8 +25,7 @@ struct ShootingSessionView: View {
     @State private var endTime = Date()
     
     @State private var selectedDate: Date = Date()
-    @State private var goals: String = ""
-    @State private var reflection: String = ""
+    @State private var notes: AttributedString = ""
     @State private var address: String = ""
     @State private var selectedCoordinate: CLLocationCoordinate2D? = nil
     
@@ -285,7 +284,7 @@ struct ShootingSessionView: View {
                     )
                     session.CompetitionRounds.append(newItem)
                 default:
-                let newItem = ShootingSession(startDate: selectedDate, multiDay: false, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
+                let newItem = ShootingSession(startDate: selectedDate, multiDay: false, notes: notes, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)
             }
             try? modelContext.save()
@@ -298,8 +297,7 @@ struct ShootingSessionView: View {
     let dummy = ShootingSession(
         startDate: Date(),
         multiDay: false,
-        goals: "Improve consistency",
-        reflection: "Shot well",
+        notes: "Improve consistency",
         locationName: "Home",
         location: nil
     )

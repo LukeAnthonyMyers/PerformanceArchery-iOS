@@ -12,6 +12,7 @@ struct AnyEvent: Identifiable {
     let id: UUID
     let startDate: Date
     let endDate: Date
+    let isConfirmed: Bool
     let type: CalendarView.EventType
     let base: Any
 
@@ -19,6 +20,7 @@ struct AnyEvent: Identifiable {
         self.id = training.id
         self.startDate = training.startDate
         self.endDate = training.endDate
+        self.isConfirmed = true
         self.type = .training
         self.base = training
     }
@@ -27,6 +29,7 @@ struct AnyEvent: Identifiable {
         self.id = coaching.id
         self.startDate = coaching.startDate
         self.endDate = coaching.endDate
+        self.isConfirmed = true
         self.type = .coaching
         self.base = coaching
     }
@@ -35,6 +38,7 @@ struct AnyEvent: Identifiable {
         self.id = competition.id
         self.startDate = competition.startDate
         self.endDate = competition.endDate
+        self.isConfirmed = competition.isConfirmed
         self.type = .competitions
         self.base = competition
     }
@@ -163,22 +167,29 @@ struct CalendarView: View {
                                             HStack {
                                                 Circle()
                                                     .fill(event.type.colour)
-                                                    .frame(width: 10, height: 10)
+                                                    .frame(width: 15, height: 15)
                                                 Text(ordinalDay(from: event.startDate))
                                                     .font(.headline)
                                                 if let session = event.base as? CoachingSession {
                                                     Text("Coaching with \(session.coachName)")
                                                 }
-                                                Spacer()
-                                                Text(event.type.displayName)
-                                                    .font(.caption)
-                                                    .foregroundColor(.gray)
                                             }
                                         case "Competition":
                                             HStack {
-                                                Circle()
-                                                    .fill(event.type.colour)
-                                                    .frame(width: 10, height: 10)
+                                                if event.isConfirmed {
+                                                    Circle()
+                                                        .fill(event.type.colour)
+                                                        .frame(width: 15, height: 15)
+                                                } else {
+                                                    Circle()
+                                                        .fill(event.type.colour)
+                                                        .frame(width: 15, height: 15)
+                                                        .overlay(
+                                                            Image(systemName: "questionmark")
+                                                                .font(.system(size: 10, weight: .bold))
+                                                        )
+                                                }
+                                                
                                                 if event.startDate != event.endDate {
                                                     Text("\(ordinalDay(from: event.startDate)) - \(ordinalDay(from: event.endDate))")
                                                         .font(.headline)
@@ -190,22 +201,15 @@ struct CalendarView: View {
                                                 if let competition = event.base as? Competition {
                                                     Text(competition.name)
                                                 }
-                                                Spacer()
-                                                Text(event.type.displayName)
-                                                    .font(.caption)
-                                                    .foregroundColor(.gray)
                                             }
                                         default:
                                             HStack {
                                                 Circle()
                                                     .fill(event.type.colour)
-                                                    .frame(width: 10, height: 10)
+                                                    .frame(width: 15, height: 15)
                                                 Text(ordinalDay(from: event.startDate))
                                                     .font(.headline)
-                                                Spacer()
                                                 Text(event.type.displayName)
-                                                    .font(.caption)
-                                                    .foregroundColor(.gray)
                                             }
                                     }
                                 }
@@ -231,7 +235,9 @@ struct CalendarView: View {
                     }
                 }
                 .sheet(isPresented: $creatingEvent) {
-                    EventEditView()
+                    NavigationStack {
+                        EventEditView()
+                    }
                 }
                 .navigationTitle("Calendar")
                 .navigationBarTitleDisplayMode(.inline)

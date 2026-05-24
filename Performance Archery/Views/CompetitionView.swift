@@ -109,7 +109,9 @@ struct CompetitionView: View {
         }
         .padding()
         .sheet(isPresented: $isShowingSettings) {
-            EventEditView(event: competition)
+            NavigationStack {
+                EventEditView(event: competition)
+            }
         }
     }
     
@@ -139,10 +141,7 @@ struct ScheduleRowView: View {
             
             DatePicker(
                 "Select Time",
-                selection: Binding<Date>(
-                    get: { item.dateTime ?? Date() },
-                    set: { item.dateTime = $0 }
-                ),
+                selection: $item.dateTime,
                 displayedComponents: .hourAndMinute
             )
             .labelsHidden()
@@ -194,15 +193,15 @@ struct RoundRowView: View {
     }()
     
     let dummy = Competition(
+        isConfirmed: false,
         isEntryReminderSet: false,
         startDate: startDate,
         endDate: endDate,
         multiDay: true,
         name: "The Vegas Shoot",
         cost: "200",
-        rounds: Array(repeating: CompetitionRound(roundType: RoundType.archeryGB[3]), count: 3),
-        goals: "Improve consistency",
-        reflection: "Shot well",
+        stages: Array(0..<3).map { CompetitionRound(dayIndex: $0, roundType: RoundType.archeryGB[5]) },
+        notes: "Improve consistency",
         locationName: "Las Vegas, Nevada",
         location: nil,
     )

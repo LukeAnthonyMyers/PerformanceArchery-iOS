@@ -89,14 +89,15 @@ class CompetitionViewModel: ObservableObject {
     
     func itemsForDay(index: Int, date: Date) -> [DayRowItem] {
         let dayItems = competition?.schedule.filter {
-            Calendar.current.isDate($0.dateTime ?? date, inSameDayAs: date)
+            Calendar.current.isDate($0.dateTime, inSameDayAs: date)
         }.map { DayRowItem.schedule($0) } ?? []
         
-        let dayRounds = competition?.rounds.filter { round in
+        let rounds = competition?.stages.compactMap { $0 as? CompetitionRound }
+        let dayRounds = rounds?.filter { round in
             if let roundDate = round.startTime {
                 return Calendar.current.isDate(roundDate, inSameDayAs: date)
             }
-            return round.index == index
+            return round.dayIndex == index
         }.map { DayRowItem.round($0) } ?? []
         
         return (dayItems + dayRounds).sorted { item1, item2 in
