@@ -10,6 +10,7 @@ import SwiftUI
 
 struct CompetitionView: View {
     @Bindable var competition: Competition
+    
     @Environment(\.modelContext) private var modelContext
     
     @State private var isShowingSettings = false
@@ -29,88 +30,115 @@ struct CompetitionView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("\(competition.name)")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-            
-            if Calendar.current.isDate(competition.startDate, inSameDayAs: competition.endDate) {
-                Text("\(competition.startDate.formatted(date: .complete, time: .omitted))" + (competition.locationName.isEmpty ? "" : " at \(competition.locationName)"))
-            } else {
-                Text("\(competition.startDate.formatted(date: .complete, time: .omitted)) to \(competition.endDate.formatted(date: .complete, time: .omitted))" + (competition.locationName.isEmpty ? "" : " at \(competition.locationName)"))
-            }
-            Spacer()
-            Divider()
-
-            List {
-                ForEach(0..<competitionDays, id: \.self) { dayIndex in
-                    let dayDate = Calendar.current.date(byAdding: .day, value: dayIndex, to: competition.startDate) ?? competition.startDate
-                    
-                    Section {
-                        let combinedItems = viewModel.itemsForDay(index: dayIndex, date: dayDate)
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("\(competition.name)")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                
+                if Calendar.current.isDate(competition.startDate, inSameDayAs: competition.endDate) {
+                    Text("\(competition.startDate.formatted(date: .complete, time: .omitted))" + (competition.locationName.isEmpty ? "" : " at \(competition.locationName)"))
+                } else {
+                    Text("\(competition.startDate.formatted(date: .complete, time: .omitted)) to \(competition.endDate.formatted(date: .complete, time: .omitted))" + (competition.locationName.isEmpty ? "" : " at \(competition.locationName)"))
+                }
+                
+                Spacer()
+                Divider()
+                
+                List {
+                    ForEach(0..<competitionDays, id: \.self) { dayIndex in
+                        let dayDate = Calendar.current.date(byAdding: .day, value: dayIndex, to: competition.startDate) ?? competition.startDate
                         
-                        ForEach(combinedItems) { rowItem in
-                            switch rowItem {
-                            case .schedule(let item):
-                                ScheduleRowView(item: item)
-                            case .round(let round):
-                                RoundRowView(round: round)
-                            }
-                        }
-                        .onMove { source, destination in
-                            viewModel.moveItems(in: dayIndex, date: dayDate, from: source, to: destination)
-                        }
-                        .onDelete { offsets in
-                            let itemsAtOffsets = offsets.map { combinedItems[$0] }
+                        Section {
+                            let combinedItems = viewModel.itemsForDay(index: dayIndex, date: dayDate)
                             
-                            let scheduleItemsToDelete = itemsAtOffsets.compactMap { item -> ScheduleItem? in
-                                if case .schedule(let s) = item { return s }
-                                return nil
+                            ForEach(combinedItems) { rowItem in
+                                switch rowItem {
+                                    case .schedule(let item):
+                                        ScheduleRowView(item: item)
+                                    case .round(let round):
+                                        NavigationLink(value: round) {
+                                            RoundRowView(round: round)
+                                        }
+                                    case .eliminationRound(let match):
+                                        NavigationLink(value: match) {
+                                            HStack(spacing: 15) {
+                                                Rectangle().fill(.orange.opacity(0.3)).frame(width: 2)
+                                                Text(match.opponentName.isEmpty ? "TBD" : "vs. \(match.opponentName)")
+                                                    .font(.headline)
+                                                
+                                                Spacer()
+                                                
+                                                if !match.targetAssignment.isEmpty {
+                                                    Text("Target: \(match.targetAssignment)")
+                                                        .font(.subheadline)
+                                                }
+                                            }
+                                            .listRowSeparator(.hidden)
+                                        }
+                                }
                             }
-                            
-                            viewModel.deleteSpecificItems(scheduleItemsToDelete)
-                        }
-                    } header: {
-                        if !Calendar.current.isDate(competition.startDate, inSameDayAs: competition.endDate) {
-                            HStack {
-                                Text("Day \(dayIndex + 1) - \(dayDate.formatted(date: .abbreviated, time: .omitted))")
-                                    .font(.headline)
+                            .onMove { source, destination in
+                                viewModel.moveItems(in: dayIndex, date: dayDate, from: source, to: destination)
+                            }
+                            .onDelete { offsets in
+                                let itemsAtOffsets = offsets.map { combinedItems[$0] }
                                 
-                                Spacer()
+                                let scheduleItemsToDelete = itemsAtOffsets.compactMap { item -> ScheduleItem? in
+                                    if case .schedule(let s) = item { return s }
+                                    return nil
+                                }
                                 
-                                Button(action: { viewModel.addScheduleItem(for: dayDate) }) {
-                                    Image(systemName: "plus")
-                                        .font(.title3)
+                                viewModel.deleteSpecificItems(scheduleItemsToDelete)
+                            }
+                        } header: {
+                            if !Calendar.current.isDate(competition.startDate, inSameDayAs: competition.endDate) {
+                                HStack {
+                                    Text("Day \(dayIndex + 1) - \(dayDate.formatted(date: .abbreviated, time: .omitted))")
+                                        .font(.headline)
+                                    
+                                    Spacer()
+                                    
+                                    Button(action: { viewModel.addScheduleItem(for: dayDate) }) {
+                                        Image(systemName: "plus")
+                                            .font(.title3)
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            .listStyle(.plain)
-            .scrollDismissesKeyboard(.interactively)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(action: { isShowingSettings = true }) {
-                        Image(systemName: "gear")
-                    }
+                .listStyle(.plain)
+                .scrollDismissesKeyboard(.interactively)
+                .navigationDestination(for: CompetitionRound.self) { round in
+                    ScoringView(round: round, archerName: nil, archerCountry: nil)
                 }
-                if Calendar.current.isDate(competition.startDate, inSameDayAs: competition.endDate) {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button(action: { viewModel.addScheduleItem(for: competition.startDate) }) {
-                            Image(systemName: "plus")
+                .navigationDestination(for: HeadToHeadMatch.self) { match in
+                    H2HScoringView(match: match, archerName: nil, archerCountry: nil)
+                }
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button(action: { isShowingSettings = true }) {
+                            Image(systemName: "gear")
                         }
                     }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    EditButton()
+                    if Calendar.current.isDate(competition.startDate, inSameDayAs: competition.endDate) {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button(action: { viewModel.addScheduleItem(for: competition.startDate) }) {
+                                Image(systemName: "plus")
+                            }
+                        }
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        EditButton()
+                    }
                 }
             }
-        }
-        .padding()
-        .sheet(isPresented: $isShowingSettings) {
-            NavigationStack {
-                EventEditView(event: competition)
+            .padding()
+            .sheet(isPresented: $isShowingSettings) {
+                NavigationStack {
+                    EventEditView(event: competition)
+                }
             }
         }
     }
@@ -164,12 +192,10 @@ struct RoundRowView: View {
             
             Spacer()
             
-            Text("Target assignment:")
-                .font(.subheadline)
-            
-            TextField("...", text: $round.targetAssignment)
-                .font(.subheadline)
-                .frame(width: 30)
+            if !round.targetAssignment.isEmpty {
+                Text("Target assignment: \(round.targetAssignment)")
+                    .font(.subheadline)
+            }
         }
         .listRowSeparator(.hidden)
     }
@@ -200,7 +226,7 @@ struct RoundRowView: View {
         multiDay: true,
         name: "The Vegas Shoot",
         cost: "200",
-        stages: Array(0..<3).map { CompetitionRound(dayIndex: $0, roundType: RoundType.archeryGB[5]) },
+        stages: [HeadToHeadMatch(label: "Semi-final", eliminationType: EliminationType.worldArchery.individualRecurve18m)] + Array(0..<3).map { CompetitionRound(dayIndex: $0, roundType: RoundType.archeryGB[5]) },
         notes: "Improve consistency",
         locationName: "Las Vegas, Nevada",
         location: nil,

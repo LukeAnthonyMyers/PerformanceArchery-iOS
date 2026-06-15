@@ -18,6 +18,7 @@ struct Performance_ArcheryApp: App {
             CoachingSession.self,
             Competition.self,
             ScheduleItem.self,
+            HeadToHeadMatch.self
         ])
         // Use in-memory store for previews, persistent store for app
         let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"

@@ -8,7 +8,7 @@
 import SwiftData
 import SwiftUI
 
-struct AnyEvent: Identifiable {
+struct AnyEvent: Identifiable, Hashable {
     let id: UUID
     let startDate: Date
     let endDate: Date
@@ -41,6 +41,14 @@ struct AnyEvent: Identifiable {
         self.isConfirmed = competition.isConfirmed
         self.type = .competitions
         self.base = competition
+    }
+    
+    static func == (lhs: AnyEvent, rhs: AnyEvent) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 
@@ -103,7 +111,7 @@ struct CalendarView: View {
     }
 
     @State private var eventTypes = EventType.allCases.map { EventCategory(type: $0, show: true) }
-
+    @State private var selectedEvent: AnyEvent?
     @State private var creatingEvent: Bool = false
 
     @Environment(\.modelContext) private var modelContext
@@ -149,19 +157,11 @@ struct CalendarView: View {
             Spacer(minLength: 25)
             
             NavigationSplitView {
-                List {
+                List(selection: $selectedEvent) {
                     ForEach(eventsByMonth, id: \.key) { month, events in
                         Section(header: Text(month.formatted(.dateTime.year().month(.wide)))) {
                             ForEach(events) { event in
-                                NavigationLink {
-                                    if let training = event.base as? ShootingSession {
-                                        EventEditView(event: training)
-                                    } else if let coaching = event.base as? CoachingSession {
-                                        EventEditView(event: coaching)
-                                    } else if let competition = event.base as? Competition {
-                                        CompetitionView(competition: competition)
-                                    }
-                                } label: {
+                                NavigationLink(value: event) {
                                     switch event.type.displayName {
                                         case "Coaching Session":
                                             HStack {
@@ -242,7 +242,15 @@ struct CalendarView: View {
                 .navigationTitle("Calendar")
                 .navigationBarTitleDisplayMode(.inline)
             } detail: {
-                Text("Select an item")
+                if let event = selectedEvent {
+                    if let training = event.base as? ShootingSession {
+                        EventEditView(event: training)
+                    } else if let coaching = event.base as? CoachingSession {
+                        EventEditView(event: coaching)
+                    } else if let competition = event.base as? Competition {
+                        CompetitionView(competition: competition)
+                    }
+                }
             }
         }
     }

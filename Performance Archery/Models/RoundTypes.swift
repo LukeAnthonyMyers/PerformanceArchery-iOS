@@ -12,58 +12,83 @@ extension RoundType {
         RoundType(
             name: "WA 1440 (90m)",
             distances: [90, 70, 50, 30],
-            isMetric: true,
+            isDistanceMetric: true,
             discipline: .target,
-            targetFaces: ["122cm", "122cm", "80cm", "80cm"],
-            arrowCounts: [36, 36, 36, 36]
+            targetSizes: [122, 122, 80, 80],
+            isTargetSizeMetric: Array(repeating: true, count: 4),
+            targetFaces: Array(repeating: .xTenZone, count: 4),
+            arrowCounts: [36, 36, 36, 36],
+            arrowsPerEnd: 6
         ),
         RoundType(
             name: "WA 1440 (70m)",
             distances: [70, 60, 50, 30],
-            isMetric: true,
+            isDistanceMetric: true,
             discipline: .target,
-            targetFaces: ["122cm", "122cm", "80cm", "80cm"],
-            arrowCounts: [36, 36, 36, 36]
+            targetSizes: [122, 122, 80, 80],
+            isTargetSizeMetric: Array(repeating: true, count: 4),
+            targetFaces: Array(repeating: .xTenZone, count: 4),
+            arrowCounts: [36, 36, 36, 36],
+            arrowsPerEnd: 6
         ),
         RoundType(
             name: "WA 720 (70m)",
             distances: [70],
-            isMetric: true,
+            isDistanceMetric: true,
             discipline: .target,
-            targetFaces: ["122cm"],
-            arrowCounts: [72]
+            targetSizes: [122],
+            isTargetSizeMetric: [true],
+            targetFaces: [.xTenZone],
+            arrowCounts: [72],
+            arrowsPerEnd: 6,
+            splitScorecards: true
         ),
         RoundType(
             name: "WA 900",
             distances: [60, 50, 40],
-            isMetric: true,
+            isDistanceMetric: true,
             discipline: .target,
-            targetFaces: ["122cm"],
-            arrowCounts: [30, 30, 30]
+            targetSizes: [122, 122, 122],
+            isTargetSizeMetric: Array(repeating: true, count: 3),
+            targetFaces: Array(repeating: .xTenZone, count: 3),
+            arrowCounts: [30, 30, 30],
+            arrowsPerEnd: 6
         ),
         RoundType(
             name: "WA Combined",
             distances: [25, 18],
-            isMetric: true,
+            isDistanceMetric: true,
             discipline: .target,
-            targetFaces: ["60cm Full Face", "40cm Triple Vertical Face"],
-            arrowCounts: [60, 60]
+            targetSizes: [60, 40],
+            isTargetSizeMetric: Array(repeating: true, count: 2),
+            targetFaces: Array(repeating: .tenZone, count: 2),
+            arrowCounts: [60, 60],
+            arrowsPerEnd: 3,
+            splitScorecards: true
         ),
         RoundType(
             name: "WA 25",
             distances: [25],
-            isMetric: true,
+            isDistanceMetric: true,
             discipline: .target,
-            targetFaces: ["60cm Full Face"],
-            arrowCounts: [60]
+            targetSizes: [60],
+            isTargetSizeMetric: [true],
+            targetFaces: [.tenZone],
+            arrowCounts: [60],
+            arrowsPerEnd: 3,
+            splitScorecards: true
         ),
         RoundType(
             name: "WA 18",
             distances: [18],
-            isMetric: true,
+            isDistanceMetric: true,
             discipline: .target,
-            targetFaces: ["40cm Triple Vertical Face"],
-            arrowCounts: [60]
+            targetSizes: [40],
+            isTargetSizeMetric: [true],
+            targetFaces: [.tenZone],
+            arrowCounts: [60],
+            arrowsPerEnd: 3,
+            splitScorecards: true
         )
     ]
     
@@ -71,50 +96,70 @@ extension RoundType {
         RoundType(
             name: "Archery GB Imperial Clout (180 yards)",
             distances: [180],
-            isMetric: false,
+            isDistanceMetric: false,
             discipline: .target,
-            targetFaces: ["12ft ring"],
-            arrowCounts: [30]
+            targetSizes: [144],
+            isTargetSizeMetric: [false],
+            targetFaces: [.imperialClout],
+            arrowCounts: [30],
+            arrowsPerEnd: 6
         ),
         RoundType(
             name: "York",
             distances: [100, 80, 60],
-            isMetric: false,
+            isDistanceMetric: false,
             discipline: .target,
-            targetFaces: ["122cm Imperial", "122cm Imperial", "122cm Imperial"],
-            arrowCounts: [72, 48, 24]
+            targetSizes: [122, 122, 122],
+            isTargetSizeMetric: Array(repeating: false, count: 3),
+            targetFaces: Array(repeating: .imperialFiveZone, count: 3),
+            arrowCounts: [72, 48, 24],
+            arrowsPerEnd: 6
         ),
         RoundType(
             name: "Hereford/Bristol I",
             distances: [80, 60, 50],
-            isMetric: false,
+            isDistanceMetric: false,
             discipline: .target,
-            targetFaces: ["122cm Imperial", "122cm Imperial", "122cm Imperial"],
-            arrowCounts: [72, 48, 24]
+            targetSizes: [122, 122, 122],
+            isTargetSizeMetric: Array(repeating: false, count: 3),
+            targetFaces: Array(repeating: .imperialFiveZone, count: 3),
+            arrowCounts: [72, 48, 24],
+            arrowsPerEnd: 6
         ),
         RoundType(
             name: "Portsmouth",
             distances: [20],
-            isMetric: false,
+            isDistanceMetric: false,
             discipline: .target,
-            targetFaces: ["60cm"],
-            arrowCounts: [60]
+            targetSizes: [60],
+            isTargetSizeMetric: [true],
+            targetFaces: [.tenZone],
+            arrowCounts: [60],
+            arrowsPerEnd: 3,
+            splitScorecards: true
         ),
         RoundType(
             name: "Vegas",
             distances: [18],
-            isMetric: true,
+            isDistanceMetric: true,
             discipline: .target,
-            targetFaces: ["40cm Triple Triangular Face"],
-            arrowCounts: [60]
+            targetSizes: [40],
+            isTargetSizeMetric: [true],
+            targetFaces: [.tenZone],
+            arrowCounts: [60],
+            arrowsPerEnd: 3,
+            splitScorecards: true
         ),
         RoundType(
             name: "Vegas 300",
             distances: [20],
-            isMetric: false,
+            isDistanceMetric: false,
             discipline: .target,
-            targetFaces: ["40cm Triple Triangular Face"],
-            arrowCounts: [30]
+            targetSizes: [40],
+            isTargetSizeMetric: [true],
+            targetFaces: [.xTenZone],
+            arrowCounts: [30],
+            arrowsPerEnd: 3
         ),
     ]
     

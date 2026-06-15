@@ -71,11 +71,13 @@ class CompetitionViewModel: ObservableObject {
     enum DayRowItem: Identifiable, Hashable {
         case schedule(ScheduleItem)
         case round(CompetitionRound)
+        case eliminationRound(HeadToHeadMatch)
         
         var id: ObjectIdentifier {
             switch self {
                 case .schedule(let item): return ObjectIdentifier(item)
                 case .round(let round): return ObjectIdentifier(round)
+                case .eliminationRound(let eliminationRound): return ObjectIdentifier(eliminationRound)
             }
         }
         
@@ -83,6 +85,7 @@ class CompetitionViewModel: ObservableObject {
             switch self {
                 case .schedule(let item): return item.index
                 case .round(let round): return round.sortIndex
+                case .eliminationRound(let eliminationRound): return eliminationRound.sortIndex
             }
         }
     }
@@ -100,8 +103,15 @@ class CompetitionViewModel: ObservableObject {
             return round.dayIndex == index
         }.map { DayRowItem.round($0) } ?? []
         
-        return (dayItems + dayRounds).sorted { item1, item2 in
+        let matches = competition?.stages.compactMap { $0 as? HeadToHeadMatch }
+            let dayMatches = matches?.filter { match in
+                return match.dayIndex == index
+            }.map { DayRowItem.eliminationRound($0) } ?? []
+        
+        return (dayItems + dayRounds + dayMatches).sorted { item1, item2 in
             if item1.sortOrder == item2.sortOrder {
+                if case .schedule = item1 { return true }
+                if case .schedule = item2 { return false }
                 if case .round = item1 { return true }
                 if case .round = item2 { return false }
             }
@@ -115,8 +125,9 @@ class CompetitionViewModel: ObservableObject {
         
         for (newIndex, item) in items.enumerated() {
             switch item {
-            case .schedule(let s): s.index = newIndex
-            case .round(let r): r.sortIndex = newIndex
+                case .schedule(let s): s.index = newIndex
+                case .round(let r): r.sortIndex = newIndex
+                case .eliminationRound(let er): er.sortIndex = newIndex
             }
         }
         

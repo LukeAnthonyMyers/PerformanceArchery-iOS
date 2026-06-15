@@ -40,7 +40,7 @@ struct EventEditView: View {
     @State private var competitionName: String = ""
     @State private var coachName: String = ""
     @State private var cost: String = ""
-    @State private var scores: [String] = [""]
+    @State private var hasEliminations: Bool = false
     @State private var notesModel = RichTextEditorModel()
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 52.7276, longitude: -2.3719), // Lilleshall NSC
@@ -50,6 +50,17 @@ struct EventEditView: View {
             center: CLLocationCoordinate2D(latitude: 52.7276, longitude: -2.3719),
             span: MKCoordinateSpan(latitudeDelta: 5.0, longitudeDelta: 5.0)
     ))
+    
+    struct H2HMatchData: Identifiable {
+        var id: PersistentIdentifier?
+        var opponentName: String = ""
+        var targetAssignment: String = ""
+        var matchFormat: MatchFormat = .individual
+        var eliminationType: EliminationType = EliminationType.worldArchery.individual70m
+        var dayIndex: UInt = 0
+    }
+    
+    @State private var h2hMatchesData: [H2HMatchData] = []
         
     @State private var currentFontSize: CGFloat = 17.0
     
@@ -94,6 +105,11 @@ struct EventEditView: View {
             
             if let competition = event as? Competition {
                 let competitionRounds = competition.stages.compactMap { $0 as? CompetitionRound }
+                let matches = competition.stages.compactMap { $0 as? HeadToHeadMatch }
+                _hasEliminations = State(initialValue: !matches.isEmpty)
+                _h2hMatchesData = State(initialValue: matches.map { match in
+                    H2HMatchData(id: match.persistentModelID, opponentName: match.opponentName, targetAssignment: match.targetAssignment, matchFormat: match.matchFormat, eliminationType: match.eliminationType, dayIndex: match.dayIndex)
+                })
                 
                 _viewModel = StateObject(wrappedValue: CompetitionViewModel(competition: competition))
                 
@@ -103,7 +119,6 @@ struct EventEditView: View {
                 _cost = State(initialValue: String(competition.cost))
                 _selectedRounds = State(initialValue: competitionRounds.isEmpty ? [RoundType.allRounds[0]] : competitionRounds.map { $0.roundType })
                 _roundDayIndices = State(initialValue: competitionRounds.isEmpty ? [0] : competitionRounds.map { $0.dayIndex })
-                _scores = State(initialValue: competitionRounds.isEmpty ? [""] : competitionRounds.map { String($0.score) })
             } else if let coachingSession = event as? CoachingSession {
                 _selectedSessionType = State(initialValue: "Coaching")
                 _coachName = State(initialValue: coachingSession.coachName)
@@ -185,65 +200,125 @@ struct EventEditView: View {
                     }
                 }
                 
-                VStack {
-                    ForEach(0..<selectedRounds.count, id: \.self) { index in
-                        VStack {
-                            Picker("Round", selection: $selectedRounds[index]) {
-                                Section(header: Text("World Archery")) {
-                                    ForEach(RoundType.worldArchery, id: \.self) { round in
-                                        Text(round.name).tag(round)
+                Section(header: Text("Rounds").font(.headline)) {
+                    VStack(alignment: .leading) {
+                        ForEach(0..<selectedRounds.count, id: \.self) { index in
+                            VStack {
+                                Picker("Round \(index + 1)", selection: $selectedRounds[index]) {
+                                    Section(header: Text("World Archery")) {
+                                        ForEach(RoundType.worldArchery, id: \.self) { round in
+                                            Text(round.name).tag(round)
+                                        }
                                     }
-                                }
-                                Section(header: Text("Archery GB")) {
-                                    ForEach(RoundType.archeryGB, id: \.self) { round in
-                                        Text(round.name).tag(round)
-                                    }
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            
-                            if isMultiDay {
-                                Picker("Day", selection: $roundDayIndices[index]) {
-                                    ForEach(0..<competitionDays, id: \.self) { day in
-                                        if let date = Calendar.current.date(byAdding: .day, value: day, to: selectedStartDate) {
-                                            Text(date.formatted(.dateTime.weekday(.wide)))
-                                                .tag(UInt(day))
+                                    Section(header: Text("Archery GB")) {
+                                        ForEach(RoundType.archeryGB, id: \.self) { round in
+                                            Text(round.name).tag(round)
                                         }
                                     }
                                 }
                                 .pickerStyle(.menu)
-                            }
-                        }
-                        
-                        Divider()
-                            .frame(height: 10)
-                    }
-                    
-                    HStack {
-                        if selectedRounds.count > 1 {
-                            Button("Remove Round") {
-                                selectedRounds.removeLast()
-                                scores.removeLast()
-                                roundDayIndices.removeLast()
+                                
+                                if isMultiDay {
+                                    Picker("Day", selection: $roundDayIndices[index]) {
+                                        ForEach(0..<competitionDays, id: \.self) { day in
+                                            if let date = Calendar.current.date(byAdding: .day, value: day, to: selectedStartDate) {
+                                                Text(date.formatted(.dateTime.weekday(.wide)))
+                                                    .tag(UInt(day))
+                                            }
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                }
                             }
                             
                             Divider()
+                                .frame(height: 10)
                         }
                         
-                        Button("Add Another Round") {
-                            selectedRounds.append(RoundType.allRounds[0])
-                            scores.append("")
-                            roundDayIndices.append(0)
+                        HStack(spacing: 25) {
+                            Button() {
+                                selectedRounds.append(RoundType.allRounds[0])
+                                roundDayIndices.append(0)
+                            } label: {
+                                Label("Add Round", systemImage: "plus.circle")
+                            }
+                            
+                            if selectedRounds.count > 1 {
+                                Divider()
+                                
+                                Button {
+                                    selectedRounds.removeLast()
+                                    roundDayIndices.removeLast()
+                                } label: {
+                                    Label("Remove Round", systemImage: "minus.circle")
+                                }
+                            }
                         }
+                        .buttonStyle(.borderless)
                     }
-                    .buttonStyle(.borderless)
                 }
                 
-                VStack {
-                    ForEach(selectedRounds.indices, id: \.self) { index in
-                        TextField(selectedRounds.count > 1 ? "Score - Round \(index + 1)" : "Score", text: $scores[index])
-                            .keyboardType(.decimalPad)
-                            .textFieldStyle(.roundedBorder)
+                Section(header: Text("Head-to-Head Matches").font(.headline)) {
+                    Toggle("Contains Elimination Matches", isOn: $hasEliminations)
+                    
+                    if hasEliminations {
+                        ForEach($h2hMatchesData) { $match in
+                            VStack(alignment: .leading, spacing: 12) {
+                                TextField("Opponent Name", text: $match.opponentName)
+                                    .textFieldStyle(.roundedBorder)
+                                    .textInputAutocapitalization(.words)
+                                
+                                HStack {
+                                    TextField("Target", text: $match.targetAssignment)
+                                        .textFieldStyle(.roundedBorder)
+                                        .textInputAutocapitalization(.characters)
+                                    
+                                    if isMultiDay {
+                                        Picker("Day", selection: $match.dayIndex) {
+                                            ForEach(0..<competitionDays, id: \.self) { day in
+                                                if let date = Calendar.current.date(byAdding: .day, value: day, to: selectedStartDate) {
+                                                    Text(date.formatted(.dateTime.weekday(.abbreviated))).tag(UInt(day))
+                                                }
+                                            }
+                                        }
+                                        .pickerStyle(.menu)
+                                        .labelsHidden()
+                                    }
+                                }
+                                
+                                Picker("Format", selection: $match.matchFormat) {
+                                    Text("Individual").tag(MatchFormat.individual)
+                                    Text("Mixed Team").tag(MatchFormat.mixedTeam)
+                                    Text("Team").tag(MatchFormat.team)
+                                }
+                                .pickerStyle(.segmented)
+                                
+                                Picker("Scoring", selection: $match.eliminationType.isCumulativeScoring) {
+                                    Text("Set System").tag(false)
+                                    Text("Cumulative Scoring").tag(true)
+                                }
+                                .pickerStyle(.segmented)
+                            }
+                            .padding(.vertical, 5)
+                        }
+                        .onDelete { offsets in
+                            h2hMatchesData.remove(atOffsets: offsets)
+                        }
+                        
+                        HStack(spacing: 25) {
+                            Button(action: { h2hMatchesData.append(H2HMatchData()) }) {
+                                Label("Add Match", systemImage: "plus.circle")
+                            }
+                            
+                            if h2hMatchesData.count > 0 {
+                                Divider()
+                                
+                                Button(action: { h2hMatchesData.removeLast() }) {
+                                    Label("Remove Match", systemImage: "minus.circle")
+                                }
+                            }
+                        }
+                        .buttonStyle(.borderless)
                     }
                 }
             } else if selectedSessionType == "Coaching" {
@@ -424,31 +499,40 @@ struct EventEditView: View {
             competition.entryOpeningTime = viewModel.entryOpeningTime
             competition.isConfirmed = isConfirmed
 
-            let targetCount = selectedRounds.count
-            
-            while competition.stages.count > targetCount {
-                if let stageToRemove = competition.stages.last {
-                    modelContext.delete(stageToRemove)
-                    competition.stages.removeLast()
-                }
-            }
-            
-            if competition.stages.count < targetCount {
-                for i in competition.stages.count..<targetCount {
-                    competition.stages.append(CompetitionRound(roundType: selectedRounds[i]))
+            let existingRounds = competition.stages.compactMap { $0 as? CompetitionRound }
+            let existingMatches = competition.stages.compactMap { $0 as? HeadToHeadMatch }
+
+            competition.stages.removeAll()
+
+            for i in 0..<selectedRounds.count {
+                if i < existingRounds.count {
+                    let round = existingRounds[i]
+                    round.dayIndex = roundDayIndices[i]
+                    round.roundType = selectedRounds[i]
+                    competition.stages.append(round)
+                } else {
+                    competition.stages.append(CompetitionRound(dayIndex: roundDayIndices[i], roundType: selectedRounds[i]))
                 }
             }
 
-            let rounds = competition.stages.compactMap { $0 as? CompetitionRound }
-
-            for i in 0..<min(rounds.count, targetCount) {
-                let round = rounds[i]
-                round.dayIndex = roundDayIndices[i]
-                round.roundType = selectedRounds[i]
-                if i < scores.count {
-                    round.score = scores[i]
+            if hasEliminations {
+                for matchData in h2hMatchesData {
+                    if let id = matchData.id, let existingMatch = existingMatches.first(where: { $0.persistentModelID == id }) {
+                        existingMatch.opponentName = matchData.opponentName
+                        existingMatch.targetAssignment = matchData.targetAssignment
+                        existingMatch.matchFormat = matchData.matchFormat
+                        existingMatch.eliminationType = matchData.eliminationType
+                        existingMatch.dayIndex = matchData.dayIndex
+                        competition.stages.append(existingMatch)
+                    } else {
+                        competition.stages.append(HeadToHeadMatch(label: "", dayIndex: matchData.dayIndex, eliminationType: matchData.eliminationType, opponentName: matchData.opponentName, targetAssignment: matchData.targetAssignment, matchFormat: matchData.matchFormat))
+                    }
                 }
             }
+
+            let keptStageIDs = Set(competition.stages.map { $0.persistentModelID })
+            for round in existingRounds where !keptStageIDs.contains(round.persistentModelID) { modelContext.delete(round) }
+            for match in existingMatches where !keptStageIDs.contains(match.persistentModelID) { modelContext.delete(match) }
 
             viewModel.saveCompetition()
         } else if let coachingSession = existingEvent as? CoachingSession {
@@ -486,19 +570,27 @@ struct EventEditView: View {
         withAnimation {
             switch selectedSessionType {
                 case "Coaching":
-                let newItem = CoachingSession(startDate: selectedStartDate, endDate: selectedEndDate, multiDay: isMultiDay, coachName: coachName, notes: notesModel.text, locationName: address, location: selectedCoordinate)
-                    modelContext.insert(newItem)
-                case "Competition":
-                    var newRounds: [CompetitionRound] = []
-                    for i in 0..<selectedRounds.count {
-                        let r = CompetitionRound(dayIndex: roundDayIndices[i], roundType: selectedRounds[i], score: i < scores.count ? scores[i] : "")
-                        newRounds.append(r)
-                    }
-                let newItem = Competition(isConfirmed: isConfirmed, isEntryReminderSet: viewModel.setReminder, entryOpeningTime: viewModel.entryOpeningTime, startDate: selectedStartDate, endDate: selectedEndDate, multiDay: isMultiDay, name: competitionName, cost: cost, stages: newRounds, notes: notesModel.text, locationName: address, location: selectedCoordinate)
+                    let newItem = CoachingSession(startDate: selectedStartDate, endDate: selectedEndDate, multiDay: isMultiDay, coachName: coachName, notes: notesModel.text, locationName: address, location: selectedCoordinate)
                         modelContext.insert(newItem)
-                    
-                        viewModel.competition = newItem
-                        viewModel.saveCompetition()
+                case "Competition":
+                    var newStages: [CompetitionStage] = []
+                
+                    for i in 0..<selectedRounds.count {
+                        let r = CompetitionRound(dayIndex: roundDayIndices[i], roundType: selectedRounds[i])
+                        newStages.append(r)
+                    }
+                
+                    if hasEliminations {
+                        for matchData in h2hMatchesData {
+                            newStages.append(HeadToHeadMatch(label: "", dayIndex: matchData.dayIndex, eliminationType: matchData.eliminationType, opponentName: matchData.opponentName, targetAssignment: matchData.targetAssignment, matchFormat: matchData.matchFormat))
+                        }
+                    }
+                
+                    let newItem = Competition(isConfirmed: isConfirmed, isEntryReminderSet: viewModel.setReminder, entryOpeningTime: viewModel.entryOpeningTime, startDate: selectedStartDate, endDate: selectedEndDate, multiDay: isMultiDay, name: competitionName, cost: cost, stages: newStages, notes: notesModel.text, locationName: address, location: selectedCoordinate)
+                    modelContext.insert(newItem)
+                
+                    viewModel.competition = newItem
+                    viewModel.saveCompetition()
                 default:
                     let newItem = ShootingSession(startDate: selectedStartDate, endDate: selectedEndDate, multiDay: isMultiDay, notes: notesModel.text, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)

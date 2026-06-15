@@ -99,62 +99,252 @@ final class ScheduleItem {
     }
 }
 
+struct ArrowScore: Codable, Hashable {
+    var value: UInt8
+    var isX: Bool
+    var xCoordinate: Double?
+    var yCoordinate: Double?
+    
+    var displayText: String {
+        if isX { return "X" }
+        if value == 0 { return "M" }
+        return String(value)
+    }
+    
+    init(value: UInt8, isX: Bool = false, x: Double? = nil, y: Double? = nil) {
+        self.value = value
+        self.isX = isX
+        self.xCoordinate = x
+        self.yCoordinate = y
+    }
+}
+
 @available(iOS 26, *)
 @Model
 final class CompetitionRound: CompetitionStage {
     @Attribute(.unique) var id: UUID
     
     var roundType: RoundType
+    var isDoubleRound: Bool
+    
     var comeDowns: UInt8?
     var startTime: Date?
-    var score: String
     var targetAssignment: String
+    
+    var arrows: [ArrowScore] = []
+    
+    var score: UInt16 {
+        return arrows.reduce(0) { $0 + UInt16($1.value) }
+    }
 
-    init(id: UUID = UUID(), dayIndex: UInt = 0, roundType: RoundType, startTime: Date? = nil, arrowCount: UInt8 = 0, comeDowns: UInt8? = 0, score: String = "", targetAssignment: String = "") {
+    init(id: UUID = UUID(), dayIndex: UInt = 0, roundType: RoundType, isDoubleRound: Bool = false, startTime: Date? = nil, arrowCount: UInt8 = 0, comeDowns: UInt8? = 0, targetAssignment: String = "", arrows: [ArrowScore] = []) {
         self.id = id
         self.roundType = roundType
+        self.isDoubleRound = isDoubleRound
         self.comeDowns = comeDowns
         self.startTime = startTime
-        self.score = score
+        self.arrows = arrows
         self.targetAssignment = targetAssignment
         
         super.init(dayIndex: dayIndex)
     }
 }
 
-struct RoundType: Hashable, Codable {
-    var id: String { name }
+struct FlightEnd: Codable, Hashable {
+    var distance: Double
+    var bowCategory: String
+    
+    init(distance: Double, bowCategory: String) {
+        self.distance = distance
+        self.bowCategory = bowCategory
+    }
+}
 
+@available(iOS 26, *)
+@Model
+final class FlightRound: CompetitionStage {
+    @Attribute(.unique) var id: UUID
+    var startTime: Date?
+    
+    var ends: [FlightEnd] = []
+    
+    var endsGroupedByBowCategory: [String: [FlightEnd]] {
+        Dictionary(grouping: ends, by: \.bowCategory)
+    }
+    
+    var bestDistances: [String: Double] {
+        endsGroupedByBowCategory.mapValues { end in
+            end.map(\.distance).max() ?? 0
+        }
+    }
+
+    init(id: UUID = UUID(), dayIndex: UInt = 0, startTime: Date? = nil, ends: [FlightEnd] = []) {
+        self.id = id
+        self.startTime = startTime
+        self.ends = ends
+        
+        super.init(dayIndex: dayIndex)
+    }
+}
+
+struct RoundType: Codable, Hashable {
     var name: String
+    
     var distances: [UInt8]
-    var isMetric: Bool
+    var isDistanceMetric: Bool
+    
     var discipline: RoundDiscipline
-    var targetFaces: [String]
+    
+    var targetSizes: [UInt8]
+    var isTargetSizeMetric: [Bool]
+    var targetFaces: [TargetFace]
+    
     var arrowCounts: [UInt8]
-
-    init(name: String, distances: [UInt8], isMetric: Bool, discipline: RoundDiscipline, targetFaces: [String], arrowCounts: [UInt8]) {
+    var arrowsPerEnd: UInt8
+    
+    var splitScorecards: Bool
+    
+    init(name: String, distances: [UInt8], isDistanceMetric: Bool, discipline: RoundDiscipline, targetSizes: [UInt8], isTargetSizeMetric: [Bool], targetFaces: [TargetFace], arrowCounts: [UInt8], arrowsPerEnd: UInt8, splitScorecards: Bool = false) {
         self.name = name
         self.distances = distances
-        self.isMetric = isMetric
+        self.isDistanceMetric = isDistanceMetric
         self.discipline = discipline
+        self.targetSizes = targetSizes
+        self.isTargetSizeMetric = isTargetSizeMetric
         self.targetFaces = targetFaces
         self.arrowCounts = arrowCounts
+        self.arrowsPerEnd = arrowsPerEnd
+        self.splitScorecards = splitScorecards
+    }
+}
+
+struct EliminationType: Codable, Hashable {
+    var name: String
+    var format: MatchFormat
+    var isCumulativeScoring: Bool
+    
+    var distances: [UInt8]
+    var isDistanceMetric: Bool
+    
+    var targetSizes: [UInt8]
+    var isTargetSizeMetric: [Bool]
+    var targetFaces: [TargetFace]
+}
+
+enum MatchFormat: Int, Codable {
+    case individual = 0
+    case mixedTeam = 1
+    case team = 2
+    
+    var arrowsPerEnd: Int {
+        switch self {
+            case .individual: return 3
+            case .mixedTeam: return 4
+            case .team: return 6
+        }
+    }
+    
+    var maxEnds: Int {
+        switch self {
+            case .individual: return 5
+            case .mixedTeam: return 4
+            case .team: return 4
+        }
     }
 }
 
 @available(iOS 26, *)
 @Model
 final class HeadToHeadMatch: CompetitionStage {
+    var label: String
+    var targetAssignment: String
+    var eliminationType: EliminationType
+    
     var opponentName: String = ""
-    var opponentShootOff: Int? = nil    
-    var opponentArrows: [[Int]] = [[], [], [], [], []]
+    var opponentArrows: [[ArrowScore]] = [[], [], [], [], []]
     
-    var userArrows: [[Int]] = [[], [], [], [], []]
-    var userShootOff: Int? = nil
-    var userClosestToCenter: Bool = false
+    var userArrows: [[ArrowScore]] = [[], [], [], [], []]
     
-    init(dayIndex: UInt = 0, opponentName: String = "") {
+    var userShootOffs: [ArrowScore] = []
+    var opponentShootOffs: [ArrowScore] = []
+    var manualShootOffWinner: Bool? = nil
+    
+    var shootOffWinner: Bool? {
+        if let manualOverride = manualShootOffWinner { return manualOverride }
+        
+        let count = min(userShootOffs.count, opponentShootOffs.count)
+        guard count > 0 else { return nil }
+        
+        for i in 0..<count {
+            let uArrow = userShootOffs[i]
+            let oArrow = opponentShootOffs[i]
+            
+            if let uX = uArrow.xCoordinate, let uY = uArrow.yCoordinate,
+               let oX = oArrow.xCoordinate, let oY = oArrow.yCoordinate {
+                let uDist = (uX - 0.5) * (uX - 0.5) + (uY - 0.5) * (uY - 0.5)
+                let oDist = (oX - 0.5) * (oX - 0.5) + (oY - 0.5) * (oY - 0.5)
+                
+                if uDist != oDist { return uDist < oDist }
+            }
+            
+            if uArrow.value != oArrow.value { return uArrow.value > oArrow.value }
+            if uArrow.isX != oArrow.isX { return uArrow.isX }
+        }
+        
+        return nil
+    }
+    
+    var matchFormatRaw: Int
+    var matchFormat: MatchFormat {
+        get { MatchFormat(rawValue: matchFormatRaw) ?? .individual }
+        set { matchFormatRaw = newValue.rawValue }
+    }
+    
+    var userTotalScore: Int {
+        userArrows.flatMap { $0 }.reduce(0) { $0 + Int($1.value) }
+    }
+    
+    var opponentTotalScore: Int {
+        opponentArrows.flatMap { $0 }.reduce(0) { $0 + Int($1.value) }
+    }
+    
+    var userSetPoints: Int { calculateMatchSetPoints(forUser: true) }
+    var opponentSetPoints: Int { calculateMatchSetPoints(forUser: false) }
+    
+    private func calculateMatchSetPoints(forUser: Bool) -> Int {
+        guard !eliminationType.isCumulativeScoring else { return 0 }
+        
+        var uPoints = 0
+        var oPoints = 0
+        
+        for i in 0..<matchFormat.maxEnds {
+            let uEnd = userArrows[safe: i] ?? []
+            let oEnd = opponentArrows[safe: i] ?? []
+            
+            if uEnd.isEmpty && oEnd.isEmpty { continue }
+            
+            let uTotal = uEnd.reduce(0) { $0 + Int($1.value) }
+            let oTotal = oEnd.reduce(0) { $0 + Int($1.value) }
+            
+            if uTotal == oTotal {
+                uPoints += 1
+                oPoints += 1
+            } else if uTotal > oTotal {
+                uPoints += 2
+            } else {
+                oPoints += 2
+            }
+        }
+        
+        return forUser ? uPoints : oPoints
+    }
+    
+    init(label: String, dayIndex: UInt = 0, eliminationType: EliminationType, opponentName: String = "", targetAssignment: String = "", matchFormat: MatchFormat = .individual) {
+        self.label = label
+        self.eliminationType = eliminationType
         self.opponentName = opponentName
+        self.targetAssignment = targetAssignment
+        self.matchFormatRaw = matchFormat.rawValue
         
         super.init(dayIndex: dayIndex)
     }
