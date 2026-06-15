@@ -19,15 +19,13 @@ struct ShootingSessionView: View {
     let shootingTypes = ["Competition Round", "Fixed Distance"]
     @State private var selectedShootingType = "Competition Round"
     
-    let rounds = ["WA18", "WA25", "WA720", "WA900", "WA1440"]
-    @State private var selectedRound = "WA720"
+    @State private var selectedRound = RoundType.allRounds[0]
     
     @State private var startTime = Date()
     @State private var endTime = Date()
     
     @State private var selectedDate: Date = Date()
-    @State private var goals: String = ""
-    @State private var reflection: String = ""
+    @State private var notes: AttributedString = ""
     @State private var address: String = ""
     @State private var selectedCoordinate: CLLocationCoordinate2D? = nil
     
@@ -134,7 +132,7 @@ struct ShootingSessionView: View {
         var startTime: Date {
             switch self {
                 case .fixedDistance(let fd): return fd.startTime
-                case .competitionRound(let cr): return cr.startTime
+                case .competitionRound(let cr): return cr.startTime ?? Date()
             }
         }
     }
@@ -154,8 +152,8 @@ struct ShootingSessionView: View {
                             Text(fd.startTime.formatted(date: .omitted, time: .shortened)).bold()
                             Text("\(fd.targetFace) @ \(fd.distance)\(fd.metric ? "m" : "yds")")
                         case .competitionRound(let cr):
-                            Text(cr.startTime.formatted(date: .omitted, time: .shortened)).bold()
-                            Text("\(cr.name)")
+                            Text((cr.startTime ?? Date()).formatted(date: .omitted, time: .shortened)).bold()
+                            Text("\(cr.roundType.name)")
                     }
                 }
             }
@@ -192,7 +190,7 @@ struct ShootingSessionView: View {
                     }
                     Spacer()
                 case .competitionRound(let cr):
-                    Text("\(cr.name)")
+                Text("\(cr.roundType.name)")
             }
         }
         .toolbar {
@@ -239,8 +237,16 @@ struct ShootingSessionView: View {
                     }
                 } else {
                     Picker("Round", selection: $selectedRound) {
-                        ForEach(rounds, id: \.self) { round in
-                            Text(round)
+                        Section(header: Text("World Archery")) {
+                            ForEach(RoundType.worldArchery, id: \.self) { round in
+                                Text(round.name)
+                            }
+                        }
+                        
+                        Section(header: Text("Archery GB")) {
+                            ForEach(RoundType.archeryGB, id: \.self) { round in
+                                Text(round.name)
+                            }
                         }
                     }
                     .pickerStyle(.menu)
@@ -261,7 +267,7 @@ struct ShootingSessionView: View {
             }
             .padding()
         }
-        .navigationTitle("\(session.dateTime, format: Date.FormatStyle(date: .complete, time: .omitted))")
+        .navigationTitle("\(session.startDate, format: Date.FormatStyle(date: .complete, time: .omitted))")
         .navigationBarTitleDisplayMode(.inline)
     }
     
@@ -273,15 +279,12 @@ struct ShootingSessionView: View {
                     session.fixedDistanceShooting.append(newItem)
                 case "Competition Round":
                     let newItem = CompetitionRound(
-                        name: selectedRound,
-                        distances: [selectedDistance.num],
-                        metric: selectedDistance.isMetric,
-                        startTime: startTime,
-                        targetFaces: [selectedTarget.id]
+                        roundType: selectedRound,
+                        startTime: startTime
                     )
                     session.CompetitionRounds.append(newItem)
                 default:
-                    let newItem = ShootingSession(dateTime: selectedDate, goals: goals, reflection: reflection, locationName: address, location: selectedCoordinate)
+                let newItem = ShootingSession(startDate: selectedDate, multiDay: false, notes: notes, locationName: address, location: selectedCoordinate)
                     modelContext.insert(newItem)
             }
             try? modelContext.save()
@@ -292,9 +295,9 @@ struct ShootingSessionView: View {
 
 #Preview {
     let dummy = ShootingSession(
-        dateTime: Date(),
-        goals: "Improve consistency",
-        reflection: "Shot well",
+        startDate: Date(),
+        multiDay: false,
+        notes: "Improve consistency",
         locationName: "Home",
         location: nil
     )
@@ -304,3 +307,4 @@ struct ShootingSessionView: View {
     }
     .modelContainer(for: ShootingSession.self, inMemory: true)
 }
+
