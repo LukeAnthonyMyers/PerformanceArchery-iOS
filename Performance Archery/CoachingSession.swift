@@ -15,11 +15,12 @@ final class CoachingSession {
     var coachName: String
     var arrowCount: UInt
     
-    var dateTime: Date
+    var startDate: Date
+    var endDate: Date
+    
     var latitude: Double?
     var longitude: Double?
-    var goals: String
-    var reflection: String
+    var notes: AttributedString
     
     var locationName: String
     var location: CLLocationCoordinate2D? {
@@ -33,17 +34,23 @@ final class CoachingSession {
         }
     }
     
-    init(id: UUID = UUID(), dateTime: Date, arrowCount: UInt = 0, coachName: String, goals: String, reflection: String, locationName: String, location: CLLocationCoordinate2D?) {
+    init(id: UUID = UUID(), startDate: Date, endDate: Date = Date(), multiDay: Bool, arrowCount: UInt = 0, coachName: String, notes: AttributedString, locationName: String, location: CLLocationCoordinate2D?) {
         self.id = id
         
         self.arrowCount = arrowCount
         self.coachName = coachName
         
-        self.dateTime = dateTime
+        self.startDate = startDate
+        
+        if multiDay {
+            self.endDate = endDate
+        } else {
+            self.endDate = startDate
+        }
+        
         self.locationName = locationName
         self.latitude = location?.latitude
         self.longitude = location?.longitude
-        self.goals = goals
-        self.reflection = reflection
+        self.notes = notes
     }
 }
