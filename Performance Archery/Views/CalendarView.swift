@@ -5,34 +5,50 @@
 //  Created by Luke Myers on 05/01/2025.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
-struct AnyEvent: Identifiable {
+struct AnyEvent: Identifiable, Hashable {
     let id: UUID
-    let dateTime: Date
+    let startDate: Date
+    let endDate: Date
+    let isConfirmed: Bool
     let type: CalendarView.EventType
     let base: Any
 
     init(_ training: ShootingSession) {
         self.id = training.id
-        self.dateTime = training.dateTime
+        self.startDate = training.startDate
+        self.endDate = training.endDate
+        self.isConfirmed = true
         self.type = .training
         self.base = training
     }
 
     init(_ coaching: CoachingSession) {
         self.id = coaching.id
-        self.dateTime = coaching.dateTime
+        self.startDate = coaching.startDate
+        self.endDate = coaching.endDate
+        self.isConfirmed = true
         self.type = .coaching
         self.base = coaching
     }
 
     init(_ competition: Competition) {
         self.id = competition.id
-        self.dateTime = competition.dateTime
+        self.startDate = competition.startDate
+        self.endDate = competition.endDate
+        self.isConfirmed = competition.isConfirmed
         self.type = .competitions
         self.base = competition
+    }
+    
+    static func == (lhs: AnyEvent, rhs: AnyEvent) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 
@@ -79,23 +95,23 @@ struct CalendarView: View {
         
         return allEvents
             .filter { isEventTypeVisible($0.type) }
-            .sorted { $0.dateTime < $1.dateTime }
+            .sorted { $0.startDate < $1.startDate }
     }
     
     var eventsByMonth: [(key: Date, value: [AnyEvent])] {
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: combinedEvents) { event in
-            calendar.date(from: calendar.dateComponents([.year, .month], from: event.dateTime))!
+            calendar.date(from: calendar.dateComponents([.year, .month], from: event.startDate))!
         }
         let sorted = grouped.sorted { $0.key < $1.key }
 
         return sorted.map { (key, events) in
-            (key, events.sorted { $0.dateTime < $1.dateTime })
+            (key, events.sorted { $0.startDate < $1.startDate })
         }
     }
 
     @State private var eventTypes = EventType.allCases.map { EventCategory(type: $0, show: true) }
-
+    @State private var selectedEvent: AnyEvent?
     @State private var creatingEvent: Bool = false
 
     @Environment(\.modelContext) private var modelContext
@@ -141,61 +157,59 @@ struct CalendarView: View {
             Spacer(minLength: 25)
             
             NavigationSplitView {
-                List {
+                List(selection: $selectedEvent) {
                     ForEach(eventsByMonth, id: \.key) { month, events in
-                        Section(header: Text(month.formatted(.dateTime.year().month()))) {
+                        Section(header: Text(month.formatted(.dateTime.year().month(.wide)))) {
                             ForEach(events) { event in
-                                NavigationLink {
-                                    if let training = event.base as? ShootingSession {
-                                        EventEditView(event: training)
-                                    } else if let coaching = event.base as? CoachingSession {
-                                        EventEditView(event: coaching)
-                                    } else if let competition = event.base as? Competition {
-                                        EventEditView(event: competition)
-                                    }
-                                } label: {
+                                NavigationLink(value: event) {
                                     switch event.type.displayName {
                                         case "Coaching Session":
                                             HStack {
                                                 Circle()
                                                     .fill(event.type.colour)
-                                                    .frame(width: 10, height: 10)
-                                                Text(ordinalDay(from: event.dateTime))
+                                                    .frame(width: 15, height: 15)
+                                                Text(ordinalDay(from: event.startDate))
                                                     .font(.headline)
                                                 if let session = event.base as? CoachingSession {
                                                     Text("Coaching with \(session.coachName)")
                                                 }
-                                                Spacer()
-                                                Text(event.type.displayName)
-                                                    .font(.caption)
-                                                    .foregroundColor(.gray)
                                             }
                                         case "Competition":
                                             HStack {
-                                                Circle()
-                                                    .fill(event.type.colour)
-                                                    .frame(width: 10, height: 10)
-                                                Text(ordinalDay(from: event.dateTime))
-                                                    .font(.headline)
+                                                if event.isConfirmed {
+                                                    Circle()
+                                                        .fill(event.type.colour)
+                                                        .frame(width: 15, height: 15)
+                                                } else {
+                                                    Circle()
+                                                        .fill(event.type.colour)
+                                                        .frame(width: 15, height: 15)
+                                                        .overlay(
+                                                            Image(systemName: "questionmark")
+                                                                .font(.system(size: 10, weight: .bold))
+                                                        )
+                                                }
+                                                
+                                                if event.startDate != event.endDate {
+                                                    Text("\(ordinalDay(from: event.startDate)) - \(ordinalDay(from: event.endDate))")
+                                                        .font(.headline)
+                                                } else {
+                                                    Text(ordinalDay(from: event.startDate))
+                                                        .font(.headline)
+                                                }
+                                                    
                                                 if let competition = event.base as? Competition {
                                                     Text(competition.name)
                                                 }
-                                                Spacer()
-                                                Text(event.type.displayName)
-                                                    .font(.caption)
-                                                    .foregroundColor(.gray)
                                             }
                                         default:
                                             HStack {
                                                 Circle()
                                                     .fill(event.type.colour)
-                                                    .frame(width: 10, height: 10)
-                                                Text(ordinalDay(from: event.dateTime))
+                                                    .frame(width: 15, height: 15)
+                                                Text(ordinalDay(from: event.startDate))
                                                     .font(.headline)
-                                                Spacer()
                                                 Text(event.type.displayName)
-                                                    .font(.caption)
-                                                    .foregroundColor(.gray)
                                             }
                                     }
                                 }
@@ -221,12 +235,22 @@ struct CalendarView: View {
                     }
                 }
                 .sheet(isPresented: $creatingEvent) {
-                    EventEditView()
+                    NavigationStack {
+                        EventEditView()
+                    }
                 }
                 .navigationTitle("Calendar")
                 .navigationBarTitleDisplayMode(.inline)
             } detail: {
-                Text("Select an item")
+                if let event = selectedEvent {
+                    if let training = event.base as? ShootingSession {
+                        EventEditView(event: training)
+                    } else if let coaching = event.base as? CoachingSession {
+                        EventEditView(event: coaching)
+                    } else if let competition = event.base as? Competition {
+                        CompetitionView(competition: competition)
+                    }
+                }
             }
         }
     }

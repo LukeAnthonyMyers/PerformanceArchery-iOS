@@ -62,4 +62,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .modelContainer(for: [ShootingSession.self, CoachingSession.self, Competition.self], inMemory: true)
 }
