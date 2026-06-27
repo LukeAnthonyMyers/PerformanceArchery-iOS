@@ -23,4 +23,15 @@ struct SightMark: Identifiable, Codable, Equatable {
     var id = UUID()
     var distanceMeters: Double
     var sightValue: Double
+    var extensionValue: Int
+}
+
+struct ArcherySetup: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var name: String
+    var description: AttributedString
+    
+    var tillerMM: Double = 0
+    var bracingHeightCM: Double = 0
+    var sightMarks: [SightMark] = []
 }

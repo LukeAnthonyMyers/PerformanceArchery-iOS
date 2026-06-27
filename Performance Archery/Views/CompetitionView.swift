@@ -111,7 +111,7 @@ struct CompetitionView: View {
                 .listStyle(.plain)
                 .scrollDismissesKeyboard(.interactively)
                 .navigationDestination(for: CompetitionRound.self) { round in
-                    ScoringView(round: round, archerName: nil, archerCountry: nil)
+                    ScoringView(round: round)
                 }
                 .navigationDestination(for: HeadToHeadMatch.self) { match in
                     H2HScoringView(match: match, archerName: nil, archerCountry: nil)

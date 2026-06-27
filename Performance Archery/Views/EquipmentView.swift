@@ -76,35 +76,129 @@ struct EquipmentView: View {
                             .frame(minHeight: 250)
                         }
                         
-                        HStack {
+                        HStack(spacing: 5) {
                             HStack {
                                 TextField("0", value: $viewModel.inputDistance, format: .number)
                                     .keyboardType(.decimalPad)
+                                    .frame(width: 30)
+                                    .multilineTextAlignment(.trailing)
                                 Text(viewModel.unitSystem.distanceUnitLabel).foregroundStyle(.secondary)
                             }
                             .frame(maxWidth: 60)
-                            .multilineTextAlignment(.trailing)
-                            
-                            Spacer()
                             
                             HStack {
                                 Text("Elevation:").foregroundStyle(.secondary)
                                 TextField("0.0", value: $viewModel.inputSightValue, format: .number)
                                     .keyboardType(.decimalPad)
+                                    .frame(width: 40)
                             }
-                            .frame(maxWidth: 160)
+                            .frame(maxWidth: 125)
                             
-                            Button("Add") { viewModel.addSightMark() }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(!viewModel.canAddSightMark)
+                            HStack {
+                                Text("Extension:").foregroundStyle(.secondary)
+                                TextField("0", value: $viewModel.inputExtensionValue, format: .number)
+                                    .keyboardType(.numberPad)
+                                    .frame(width: 25)
+                            }
+                            .frame(maxWidth: 115)
                         }
+                        
+                        Button {
+                            viewModel.addSightMark()
+                        } label: {
+                            Text("Add Sightmark")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!viewModel.canAddSightMark)
+                        .frame(maxWidth: .infinity)
                     }
                 }
             }
-            .navigationTitle("Equipment")
+            .scrollBounceBehavior(.basedOnSize)
+            .navigationTitle(viewModel.setups.first(where: { $0.id == viewModel.activeSetupId })?.name ?? "Equipment")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        viewModel.showEditSetupSheet = true
+                    } label: {
+                        Text("Edit")
+                    }
+                }
+                
+                if viewModel.setups.count > 1 {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            ForEach(viewModel.setups) { setup in
+                                Button(action: { viewModel.activeSetupId = setup.id }) {
+                                    HStack {
+                                        Text(setup.name)
+                                        if setup.id == viewModel.activeSetupId {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "list.bullet")
+                        }
+                    }
+                }
+                          
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { viewModel.showAddSetupSheet = true } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
             .scrollDismissesKeyboard(.interactively)
             .sheet(isPresented: $viewModel.showEditSightmarksSheet) {
                 EditSightMarksView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $viewModel.showAddSetupSheet) {
+                AddSetupView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $viewModel.showEditSetupSheet) {
+                EditSetupView(viewModel: viewModel)
+            }
+            .contentMargins(.top, 0, for: .scrollContent)
+        }
+    }
+}
+
+struct AddSetupView: View {
+    @Bindable var viewModel: EquipmentViewModel
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.fontResolutionContext) private var fontResolutionContext
+    
+    @State private var name: String = ""
+    @State private var descriptionModel = RichTextEditorModel()
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(header: Text("Setup Details"), footer: Text("You can format the description using Markdown (e.g., **bold**, *italic*).")) {
+                    TextField("Name (e.g. Indoor Bow)", text: $name)
+                    TextEditor(text: $descriptionModel.text, selection: $descriptionModel.selection)
+                        .frame(minHeight: 100)
+                }
+            }
+            .navigationTitle("New Setup")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        viewModel.createNewSetup(name: name, description: descriptionModel.text)
+                        dismiss()
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
             }
         }
     }
@@ -119,7 +213,7 @@ struct EditSightMarksView: View {
             List {
                 ForEach(viewModel.sortedSightMarks) { sm in
                     HStack {
-                        let distBinding = Binding<Double>(
+                        let distanceBinding = Binding<Double>(
                             get: {
                                 let meters = viewModel.sightMarks.first(where: { $0.id == sm.id })?.distanceMeters ?? 0
                                 return viewModel.displayDistance(meters)
@@ -140,10 +234,20 @@ struct EditSightMarksView: View {
                                 }
                             }
                         )
+                        
+                        let extensionBinding = Binding<Int>(
+                            get: { viewModel.sightMarks.first(where: { $0.id == sm.id })?.extensionValue ?? 0 },
+                            set: { newVal in
+                                if let idx = viewModel.sightMarks.firstIndex(where: { $0.id == sm.id }) {
+                                    viewModel.sightMarks[idx].extensionValue = newVal
+                                }
+                            }
+                        )
 
                         HStack {
-                            TextField("0", value: distBinding, format: .number)
+                            TextField("0", value: distanceBinding, format: .number)
                                 .keyboardType(.decimalPad)
+                                .frame(width: 30)
                             Text(viewModel.unitSystem.distanceUnitLabel).foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: 60)
@@ -155,8 +259,17 @@ struct EditSightMarksView: View {
                             Text("Elevation:").foregroundStyle(.secondary)
                             TextField("0.0", value: sightBinding, format: .number)
                                 .keyboardType(.decimalPad)
+                                .frame(width: 40)
                         }
-                        .frame(maxWidth: 250)
+                        .frame(maxWidth: 125)
+                        
+                        HStack {
+                            Text("Extension:").foregroundStyle(.secondary)
+                            TextField("0", value: extensionBinding, format: .number)
+                                .keyboardType(.numberPad)
+                                .frame(width: 25)
+                        }
+                        .frame(maxWidth: 115)
                     }
                     .swipeActions {
                         Button("Delete", role: .destructive) {
