@@ -15,8 +15,6 @@ struct ScorecardSegment: Identifiable {
 
 struct ScoringView: View {
     let round: CompetitionRound
-    let archerName: String?
-    let archerCountry: String?
     
     @State private var activeCardTabIndex: Int = 0
     @State private var activeEndIndex: Int? = nil
@@ -63,9 +61,7 @@ struct ScoringView: View {
                         ScoresheetView(
                             round: round,
                             endRange: segments[idx].endsRange,
-                            distanceLabel: segments[idx].label,
-                            archerName: archerName,
-                            archerCountry: archerCountry
+                            distanceLabel: segments[idx].label
                         ) { selectedEnd in
                             activeEndIndex = selectedEnd
                         }
@@ -524,9 +520,7 @@ struct TargetFaceView: View {
     NavigationStack {
         ScoringView(round: CompetitionRound(roundType: RoundType.worldArchery[2],
                                             targetAssignment: "12A",
-                                            arrows: Array(0..<11).map { ArrowScore(value: $0, isX: false) }),
-                    archerName: "Lim Sihyeon",
-                    archerCountry: "KOR - Korea"
+                                            arrows: Array(0..<11).map { ArrowScore(value: $0, isX: false) })
         )
     }
 }

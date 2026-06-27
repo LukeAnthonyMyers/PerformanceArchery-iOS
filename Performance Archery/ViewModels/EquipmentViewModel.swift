@@ -17,8 +17,17 @@ class EquipmentViewModel {
         }
     }
     
-    var sightMarks: [SightMark] = [] {
-        didSet { saveSightMarks() }
+    var setups: [ArcherySetup] = [] {
+        didSet { saveSetups() }
+    }
+    
+    var activeSetupId: UUID {
+        didSet { UserDefaults.standard.set(activeSetupId.uuidString, forKey: "activeSetupId") }
+    }
+    
+    var sightMarks: [SightMark] {
+        get { setups[activeIndex].sightMarks }
+        set { setups[activeIndex].sightMarks = newValue }
     }
     
     private var tillerMM: Double = 0
@@ -26,7 +35,10 @@ class EquipmentViewModel {
     
     var inputDistance: Double? = nil
     var inputSightValue: Double? = nil
+    var inputExtensionValue: Int? = nil
     var showEditSightmarksSheet: Bool = false
+    var showAddSetupSheet: Bool = false
+    var showEditSetupSheet: Bool = false
     
     init() {
         if let raw = UserDefaults.standard.string(forKey: "unitSystem"),
@@ -34,28 +46,64 @@ class EquipmentViewModel {
             self.unitSystem = system
         }
         
-        if let data = UserDefaults.standard.data(forKey: "sightMarksJSON"),
-           let decoded = try? JSONDecoder().decode([SightMark].self, from: data) {
-            self.sightMarks = decoded
+        if let data = UserDefaults.standard.data(forKey: "setupsJSON"),
+           let decoded = try? JSONDecoder().decode([ArcherySetup].self, from: data), !decoded.isEmpty {
+            self.setups = decoded
+            
+            if let activeString = UserDefaults.standard.string(forKey: "activeSetupId"),
+               let activeUUID = UUID(uuidString: activeString),
+               decoded.contains(where: { $0.id == activeUUID }) {
+                self.activeSetupId = activeUUID
+            } else {
+                self.activeSetupId = decoded[0].id
+            }
+        } else {
+            let oldTiller = UserDefaults.standard.double(forKey: "tiller_mm")
+            let oldBH = UserDefaults.standard.double(forKey: "bracingHeight_cm")
+            
+            var oldMarks: [SightMark] = []
+            if let data = UserDefaults.standard.data(forKey: "sightMarksJSON"),
+               let decodedMarks = try? JSONDecoder().decode([SightMark].self, from: data) {
+                oldMarks = decodedMarks
+            }
+            
+            let defaultSetup = ArcherySetup(
+                id: UUID(),
+                name: "Primary Setup",
+                description: "My default equipment.",
+                tillerMM: oldTiller,
+                bracingHeightCM: oldBH,
+                sightMarks: oldMarks
+            )
+            
+            self.setups = [defaultSetup]
+            self.activeSetupId = defaultSetup.id
         }
-        
-        self.tillerMM = UserDefaults.standard.double(forKey: "tiller_mm")
-        self.bracingHeightCM = UserDefaults.standard.double(forKey: "bracingHeight_cm")
+    }
+    
+    private var activeIndex: Int {
+        setups.firstIndex(where: { $0.id == activeSetupId }) ?? 0
     }
     
     var tillerDisplay: Double {
-        get { unitSystem == .metric ? tillerMM : tillerMM / 25.4 }
+        get {
+            let tillerMM = setups[activeIndex].tillerMM
+            return unitSystem == .metric ? tillerMM : tillerMM / 25.4
+        }
         set {
-            tillerMM = unitSystem == .metric ? newValue : newValue * 25.4
-            UserDefaults.standard.set(tillerMM, forKey: "tiller_mm")
+            let tillerMM = unitSystem == .metric ? newValue : newValue * 25.4
+            setups[activeIndex].tillerMM = tillerMM
         }
     }
     
     var bracingHeightDisplay: Double {
-        get { unitSystem == .metric ? bracingHeightCM : bracingHeightCM / 2.54 }
+        get {
+            let bracingHeightCM = setups[activeIndex].bracingHeightCM
+            return unitSystem == .metric ? bracingHeightCM : bracingHeightCM / 2.54
+        }
         set {
-            bracingHeightCM = unitSystem == .metric ? newValue : newValue * 2.54
-            UserDefaults.standard.set(bracingHeightCM, forKey: "bracingHeight_cm")
+            let bracingHeightCM = unitSystem == .metric ? newValue : newValue * 2.54
+            setups[activeIndex].bracingHeightCM = bracingHeightCM
         }
     }
     
@@ -82,15 +130,16 @@ class EquipmentViewModel {
     }
     
     func addSightMark() {
-        guard let dist = inputDistance, let sight = inputSightValue else { return }
+        guard let distance = inputDistance, let sightValue = inputSightValue, let extensionValue = inputExtensionValue else { return }
         
-        let distanceMeters = unitSystem == .metric ? dist : dist * 0.9144
-        let newMark = SightMark(distanceMeters: distanceMeters, sightValue: sight)
+        let distanceMeters = unitSystem == .metric ? distance : distance * 0.9144
+        let newMark = SightMark(distanceMeters: distanceMeters, sightValue: sightValue, extensionValue: extensionValue)
         
         sightMarks.append(newMark)
         
         inputDistance = nil
         inputSightValue = nil
+        inputExtensionValue = nil
     }
     
     func deleteSightMark(id: UUID) {
@@ -101,9 +150,33 @@ class EquipmentViewModel {
         unitSystem == .metric ? meters : meters / 0.9144
     }
     
-    private func saveSightMarks() {
-        if let data = try? JSONEncoder().encode(sightMarks) {
-            UserDefaults.standard.set(data, forKey: "sightMarksJSON")
+    func createNewSetup(name: String, description: AttributedString) {
+        let newSetup = ArcherySetup(name: name, description: description)
+        setups.append(newSetup)
+        activeSetupId = newSetup.id
+    }
+    
+    func updateActiveSetup(name: String, description: AttributedString) {
+        let index = activeIndex
+        setups[index].name = name
+        setups[index].description = description
+    }
+    
+    func deleteActiveSetup() {
+        guard setups.count > 1 else { return }
+        
+        let idToDelete = activeSetupId
+        
+        if let fallbackSetup = setups.first(where: { $0.id != idToDelete }) {
+            activeSetupId = fallbackSetup.id
+        }
+        
+        setups.removeAll { $0.id == idToDelete }
+    }
+    
+    private func saveSetups() {
+        if let data = try? JSONEncoder().encode(setups) {
+            UserDefaults.standard.set(data, forKey: "setupsJSON")
         }
     }
     
