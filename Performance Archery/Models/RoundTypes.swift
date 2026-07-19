@@ -110,7 +110,7 @@ extension RoundType {
             isDistanceMetric: false,
             discipline: .target,
             targetSizes: [122, 122, 122],
-            isTargetSizeMetric: Array(repeating: false, count: 3),
+            isTargetSizeMetric: Array(repeating: true, count: 3),
             targetFaces: Array(repeating: .imperialFiveZone, count: 3),
             arrowCounts: [72, 48, 24],
             arrowsPerEnd: 6
@@ -121,9 +121,20 @@ extension RoundType {
             isDistanceMetric: false,
             discipline: .target,
             targetSizes: [122, 122, 122],
-            isTargetSizeMetric: Array(repeating: false, count: 3),
+            isTargetSizeMetric: Array(repeating: true, count: 3),
             targetFaces: Array(repeating: .imperialFiveZone, count: 3),
             arrowCounts: [72, 48, 24],
+            arrowsPerEnd: 6
+        ),
+        RoundType(
+            name: "American",
+            distances: [60, 50, 40],
+            isDistanceMetric: false,
+            discipline: .target,
+            targetSizes: [122, 122, 122],
+            isTargetSizeMetric: Array(repeating: true, count: 3),
+            targetFaces: Array(repeating: .imperialFiveZone, count: 3),
+            arrowCounts: [30, 30, 30],
             arrowsPerEnd: 6
         ),
         RoundType(

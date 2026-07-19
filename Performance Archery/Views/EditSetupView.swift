@@ -20,8 +20,18 @@ struct EditSetupView: View {
             Form {
                 Section(header: Text("Setup Details")) {
                     TextField("Name", text: $name)
-                    TextEditor(text: $description)
-                        .frame(minHeight: 100)
+                    
+                    ZStack(alignment: .topLeading) {
+                        if description.characters.isEmpty {
+                            Text("Description")
+                                .foregroundStyle(.tertiary)
+                        }
+                        
+                        TextEditor(text: $description)
+                            .padding(.horizontal, -4)
+                            .padding(.vertical, -9)
+                    }
+                    .frame(height: 250)
                 }
                 
                 if viewModel.setups.count > 1 {
@@ -43,6 +53,7 @@ struct EditSetupView: View {
                     description = activeSetup.description
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

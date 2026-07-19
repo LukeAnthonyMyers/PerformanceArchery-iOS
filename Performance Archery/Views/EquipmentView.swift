@@ -207,45 +207,23 @@ struct AddSetupView: View {
 struct EditSightMarksView: View {
     @Bindable var viewModel: EquipmentViewModel
     @Environment(\.dismiss) var dismiss
+    
+    @State private var drafts: [DraftSightMark] = []
+    
+    struct DraftSightMark: Identifiable {
+        let id: UUID
+        var distance: Double?
+        var sightValue: Double?
+        var extensionValue: Int?
+    }
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(viewModel.sortedSightMarks) { sm in
+                ForEach($drafts) { $draft in
                     HStack {
-                        let distanceBinding = Binding<Double>(
-                            get: {
-                                let meters = viewModel.sightMarks.first(where: { $0.id == sm.id })?.distanceMeters ?? 0
-                                return viewModel.displayDistance(meters)
-                            },
-                            set: { val in
-                                let meters = viewModel.unitSystem == .metric ? val : val * 0.9144
-                                if let idx = viewModel.sightMarks.firstIndex(where: { $0.id == sm.id }) {
-                                    viewModel.sightMarks[idx].distanceMeters = meters
-                                }
-                            }
-                        )
-
-                        let sightBinding = Binding<Double>(
-                            get: { viewModel.sightMarks.first(where: { $0.id == sm.id })?.sightValue ?? 0 },
-                            set: { newVal in
-                                if let idx = viewModel.sightMarks.firstIndex(where: { $0.id == sm.id }) {
-                                    viewModel.sightMarks[idx].sightValue = newVal
-                                }
-                            }
-                        )
-                        
-                        let extensionBinding = Binding<Int>(
-                            get: { viewModel.sightMarks.first(where: { $0.id == sm.id })?.extensionValue ?? 0 },
-                            set: { newVal in
-                                if let idx = viewModel.sightMarks.firstIndex(where: { $0.id == sm.id }) {
-                                    viewModel.sightMarks[idx].extensionValue = newVal
-                                }
-                            }
-                        )
-
                         HStack {
-                            TextField("0", value: distanceBinding, format: .number)
+                            TextField("0", value: $draft.distance, format: .number)
                                 .keyboardType(.decimalPad)
                                 .frame(width: 30)
                             Text(viewModel.unitSystem.distanceUnitLabel).foregroundStyle(.secondary)
@@ -257,7 +235,7 @@ struct EditSightMarksView: View {
 
                         HStack {
                             Text("Elevation:").foregroundStyle(.secondary)
-                            TextField("0.0", value: sightBinding, format: .number)
+                            TextField("0.0", value: $draft.sightValue, format: .number)
                                 .keyboardType(.decimalPad)
                                 .frame(width: 40)
                         }
@@ -265,7 +243,7 @@ struct EditSightMarksView: View {
                         
                         HStack {
                             Text("Extension:").foregroundStyle(.secondary)
-                            TextField("0", value: extensionBinding, format: .number)
+                            TextField("0", value: $draft.extensionValue, format: .number)
                                 .keyboardType(.numberPad)
                                 .frame(width: 25)
                         }
@@ -273,16 +251,59 @@ struct EditSightMarksView: View {
                     }
                     .swipeActions {
                         Button("Delete", role: .destructive) {
-                            viewModel.deleteSightMark(id: sm.id)
+                            drafts.removeAll(where: { $0.id == draft.id })
                         }
                     }
                 }
             }
             .navigationTitle("Edit Sight Marks")
+            .onAppear {
+                drafts = viewModel.sortedSightMarks.map { sm in
+                    DraftSightMark(
+                        id: sm.id,
+                        distance: viewModel.displayDistance(sm.distanceMeters),
+                        sightValue: sm.sightValue,
+                        extensionValue: sm.extensionValue
+                    )
+                }
+            }
+            .scrollDismissesKeyboard(.interactively)
             .toolbar {
-                Button("Done") { dismiss() }
+                Button("Done") {
+                    saveDrafts()
+                    dismiss()
+                }
             }
         }
+    }
+    
+    private func saveDrafts() {
+        var updatedMarks: [SightMark] = []
+        
+        for draft in drafts {
+            let original = viewModel.sightMarks.first(where: { $0.id == draft.id })
+            
+            let fallbackDistance = original.map { viewModel.displayDistance($0.distanceMeters) } ?? 0
+            let fallbackSight = original?.sightValue ?? 0
+            let fallbackExtension = original?.extensionValue ?? 0
+            
+            let finalDistanceDisplay = draft.distance ?? fallbackDistance
+            let finalSight = draft.sightValue ?? fallbackSight
+            let finalExtension = draft.extensionValue ?? fallbackExtension
+            
+            let finalDistanceMeters = viewModel.unitSystem == .metric ? finalDistanceDisplay : finalDistanceDisplay * 0.9144
+            
+            let updatedMark = SightMark(
+                id: draft.id,
+                distanceMeters: finalDistanceMeters,
+                sightValue: finalSight,
+                extensionValue: finalExtension
+            )
+            
+            updatedMarks.append(updatedMark)
+        }
+        
+        viewModel.sightMarks = updatedMarks
     }
 }
 
