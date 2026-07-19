@@ -112,8 +112,8 @@ class EquipmentViewModel {
     }
     
     var canAddSightMark: Bool {
-        guard let dist = inputDistance, let sight = inputSightValue else { return false }
-        return dist >= 0 && sight >= 0 && sight <= 100
+        guard let dist = inputDistance, let sight = inputSightValue, let ext = inputExtensionValue else { return false }
+        return dist >= 0 && sight >= 0 && sight <= 100 && ext >= 0
     }
     
     var chartXDomain: ClosedRange<Double> {
