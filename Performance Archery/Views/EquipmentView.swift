@@ -9,6 +9,7 @@ import SwiftUI
 import Charts
 
 struct EquipmentView: View {
+    @State private var selectedChartDistance: Double?
     @State private var viewModel = EquipmentViewModel()
 
     var body: some View {
@@ -63,10 +64,28 @@ struct EquipmentView: View {
                                     LineMark(x: .value("Dist", dist), y: .value("Sight", sm.sightValue))
                                         .interpolationMethod(.monotone)
                                 }
+                                
+                                if let selectedDist = selectedChartDistance,
+                                   let sightValue = viewModel.interpolatedSightValue(for: selectedDist) {
+                                    RuleMark(x: .value("Selected Distance", selectedDist))
+                                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 5]))
+                                        .foregroundStyle(.gray)
+                                        .annotation(position: .top, overflowResolution: .init(x: .fit, y: .disabled)) {
+                                            VStack(spacing: 2) {
+                                                Text("\(selectedDist, specifier: "%.1f") \(viewModel.unitSystem.distanceUnitLabel)")
+                                                    .font(.caption.bold())
+                                                Text("Sight: \(sightValue, specifier: "%.2f")")
+                                                    .font(.caption)
+                                            }
+                                            .padding(6)
+                                            .background(Color(.systemGray5).opacity(0.75))
+                                            .cornerRadius(8)
+                                        }
+                                }
                             }
                             .chartXScale(domain: viewModel.chartXDomain)
                             .chartXAxisLabel("Distance (\(viewModel.unitSystem.distanceUnitLabel))")
-                            .chartYAxisLabel("Sight mark")
+                            .chartYAxisLabel("\nSight mark")
                             .chartXAxis {
                                 AxisMarks(values: .stride(by: 10))
                             }
@@ -74,6 +93,7 @@ struct EquipmentView: View {
                                 AxisMarks(values: .automatic(desiredCount: 10))
                             }
                             .frame(minHeight: 250)
+                            .chartXSelection(value: $selectedChartDistance)
                         }
                         
                         HStack(spacing: 5) {

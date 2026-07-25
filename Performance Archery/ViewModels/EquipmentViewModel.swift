@@ -189,4 +189,71 @@ class EquipmentViewModel {
             inputDistance = dist * 0.9144
         }
     }
+    
+    func interpolatedSightValue(for distance: Double) -> Double? {
+        let sorted = sortedSightMarks
+        guard sorted.count >= 2 else { return nil }
+        
+        let points = sorted.map { (x: displayDistance($0.distanceMeters), y: $0.sightValue) }
+        let n = points.count
+        
+        if distance <= points.first!.x { return points.first!.y }
+        if distance >= points.last!.x { return points.last!.y }
+        
+        var secants = [Double](repeating: 0.0, count: n - 1)
+        for i in 0..<n - 1 {
+            secants[i] = (points[i+1].y - points[i].y) / (points[i+1].x - points[i].x)
+        }
+        
+        var m = [Double](repeating: 0.0, count: n)
+        m[0] = secants[0]
+        m[n-1] = secants[n-2]
+        
+        for i in 1..<n-1 {
+            if secants[i-1] * secants[i] < 0 {
+                m[i] = 0.0
+            } else {
+                m[i] = (secants[i-1] + secants[i]) / 2
+            }
+        }
+        
+        for i in 0..<n-1 {
+            if secants[i] == 0.0 {
+                m[i] = 0.0
+                m[i+1] = 0.0
+            } else {
+                let alpha = m[i] / secants[i]
+                let beta = m[i+1] / secants[i]
+                
+                let distanceSquared = alpha * alpha + beta * beta
+                if distanceSquared > 9.0 {
+                    let tau = 3.0 / sqrt(distanceSquared)
+                    m[i] = tau * alpha * secants[i]
+                    m[i+1] = tau * beta * secants[i]
+                }
+            }
+        }
+        
+        for i in 0..<n-1 {
+            let p0 = points[i]
+            let p1 = points[i+1]
+            
+            if distance >= p0.x && distance <= p1.x {
+                let h = p1.x - p0.x
+                let t = (distance - p0.x) / h
+                let t2 = t * t
+                let t3 = t2 * t
+                
+                let h00 = 2 * t3 - 3 * t2 + 1
+                let h10 = t3 - 2 * t2 + t
+                let h01 = -2 * t3 + 3 * t2
+                let h11 = t3 - t2
+                
+                let y = h00 * p0.y + h10 * h * m[i] + h01 * p1.y + h11 * h * m[i+1]
+                return y
+            }
+        }
+        
+        return nil
+    }
 }
