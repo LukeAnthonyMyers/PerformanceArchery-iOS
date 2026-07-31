@@ -31,6 +31,10 @@ struct ContentView: View {
                     .tabItem() {
                         Label("Training Log", systemImage: "list.bullet.clipboard")
                     }
+                EquipmentView()
+                    .tabItem() {
+                        Label("Equipment", systemImage: "pencil.and.ruler")
+                    }
             }
         }
         .task {

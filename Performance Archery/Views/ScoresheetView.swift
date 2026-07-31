@@ -11,8 +11,6 @@ struct ScoresheetView: View {
     let round: CompetitionRound
     let endRange: Range<Int>
     let distanceLabel: String
-    let archerName: String?
-    let archerCountry: String?
     
     var isMultipleScorecards: Bool {
         endRange.lowerBound != 0 || endRange.upperBound != round.roundType.arrowCounts.reduce(0, +) / round.roundType.arrowsPerEnd
@@ -34,8 +32,6 @@ struct ScoresheetView: View {
             VStack(spacing: 0) {
                 let pageStartArrowIdx = endRange.lowerBound * Int(round.roundType.arrowsPerEnd)
                 let priorScorecardsTotal = round.arrows.prefix(pageStartArrowIdx).reduce(0) { $0 + Int($1.value) }
-                
-                ScoresheetTopHeader(archerName: archerName, archerCountry: archerCountry)
                 
                 VStack(spacing: 0) {
                     ScoresheetTableHeader(arrowsPerRow: arrowsPerRow, distanceLabel: distanceLabel, targetAssignment: round.targetAssignment, priorScorecardsTotal: priorScorecardsTotal, showGrandTotal: isMultipleScorecards)
@@ -75,38 +71,6 @@ struct ScoresheetView: View {
             }
             .padding()
         }
-    }
-}
-
-struct ScoresheetTopHeader: View {
-    let archerName: String?
-    let archerCountry: String?
-    
-    var body: some View {
-        HStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack {
-                    if let name = archerName {
-                        Text("Archer:")
-                            .font(.subheadline)
-                        Text(name)
-                            .font(.title).bold()
-                    }
-                }
-                HStack {
-                    if let country = archerCountry {
-                        Text("Country:")
-                            .font(.subheadline)
-                        Text(country)
-                            .font(.headline).bold()
-                    }
-                }
-            }
-            
-            Spacer()
-        }
-        .padding(.bottom, 10)
-        .frame(minHeight: 50, alignment: .bottom)
     }
 }
 
@@ -215,7 +179,8 @@ struct ScoresheetTableHeader: View {
                 }
             }
         }
-        .frame(height: 40)
+        .frame(minHeight: 40)
+        .padding(.top, abs(archerDetailsOffset))
     }
 }
 
@@ -451,9 +416,7 @@ extension Color {
                                 targetAssignment: "121A",
                                 arrows: Array(0..<11).map { ArrowScore(value: $0, isX: false) }),
         endRange: 0..<6,
-        distanceLabel: "70m",
-        archerName: "Lim Sihyeon",
-        archerCountry: "KOR - Korea"
+        distanceLabel: "70m"
     )
 }
 
